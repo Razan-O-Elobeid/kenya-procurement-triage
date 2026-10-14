@@ -1,4 +1,4 @@
-# Kenya Procurement Risk-Triage System
+# An Explainable Risk-Triage System for Public Procurement Oversight in Kenya
 
 An explainable AI system that ranks Kenyan government contracts by integrity risk and presents them to auditors as a prioritized review queue. Built for the CMU Africa AI System Design course (04-652). Addresses UN SDG 16: Peace, Justice and Strong Institutions.
 
