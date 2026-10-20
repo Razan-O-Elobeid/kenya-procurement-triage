@@ -2,7 +2,7 @@
 
 An explainable AI system that ranks Kenyan government contracts by integrity risk and presents them to auditors as a prioritized review queue. Built for the CMU Africa AI System Design course (04-652). Addresses UN SDG 16: Peace, Justice and Strong Institutions.
 
-This README contains the complete Phase 1 work: the data audit and the full preprocessing strategy. `phase1_strategy/Phase1_Strategy_Report.pdf` is a formatted version of the same content.
+This README contains the complete Phase 1 work: the data audit and the full preprocessing strategy. `phase1_strategy/Phase1_Strategy_Report.pdf` contains the strategy in report form; this README adds the full data overview.
 
 ## Contents
 
@@ -207,7 +207,7 @@ Procurement category: works 115,930 (44.6%), goods 85,268 (32.8%), services 57,8
 
 | Statistic | Value |
 |---|---|
-| Mean / median | 15,409,360 / 498,150 KES |
+| Mean / median | 15,409,356 / 498,150 KES |
 | Maximum | 160.6 billion KES |
 | Quartiles Q1 / Q3 | 111,537 / 2,599,744 KES |
 | Skewness | 161.0 (extremely right-skewed) |
@@ -220,7 +220,7 @@ Procurement category: works 115,930 (44.6%), goods 85,268 (32.8%), services 57,8
 
 | Measure | Value |
 |---|---|
-| Advertisement period (bidding end − start) | 42.2% negative; median 0 days among the rest; 92.8% under 7 days |
+| Advertisement period (bidding end − start) | 44.0% of tenders negative (42.2% counted per merged row, as in the Phase 1 report); median 0 days among the rest |
 | Decision period (signing − bidding end) | n = 94,140; median 22 days; 7.6% signed before bidding closed; skewness −2.69 |
 
 **Missingness mechanism tests.** A chi-square test of independence between each column's missingness and the procurement competition level (open / restricted / non-competitive). A small p-value rejects Missing Completely at Random (MCAR). Cramér's V measures how strong the link is; with this many rows it matters more than p.
@@ -330,7 +330,7 @@ Five indicators enter $R(c)$, plus one candidate pending validation [4, 5, 6].
 d(c) = t_{\text{signed}}(c) - t_{\text{close}}(c), \qquad f_3(c) = 1 - \hat{F}_{\text{train}}\big(d(c)\big)
 ```
 
-where $\hat{F}_{\text{train}}$ is the empirical distribution function of $d$ on the training set, so shorter periods score higher. Contracts signed before bidding closed (7.6%) receive the highest scores: they are either irregular or recording errors, and both warrant review. $f_3$ **replaces the advertisement period** originally planned, which is unusable: 42.2% of records have a start date after the end date, and the rest have a median of 0 days. Imputing it would manufacture a signal.
+where $\hat{F}_{\text{train}}$ is the empirical distribution function of $d$ on the training set, so shorter periods score higher. Contracts signed before bidding closed (7.6%) receive the highest scores: they are either irregular or recording errors, and both warrant review. $f_3$ **replaces the advertisement period** originally planned, which is unusable: 44.0% of tenders have a start date after the end date, and the rest have a median of 0 days. Imputing it would manufacture a signal.
 
 **$f_4$, supplier concentration.** The share of buyer $b$'s earlier awarded value that went to supplier $s$, over an expanding window of awards dated before contract $c$, after entity resolution and excluding zero values:
 
@@ -360,7 +360,7 @@ and $f_5(c) = \hat{F}_{\text{train}}(\text{MAD}_b)$. MAD is chosen over chi-squa
 | $f_4$ supplier concentration | value, resolved supplier | all but a buyer's first award | Used |
 | $f_5$ Benford MAD | value | buyers with at least 100 earlier awards | Used |
 | $f_6$ single supplier party | `parties.csv` | 79.3% list extra parties | Pending validation |
-| Advertisement period | tender start and end dates | 42.2% negative | Rejected |
+| Advertisement period | tender start and end dates | 44.0% negative | Rejected |
 | Single bidding (tenderer count) | `tender.tenderers` | absent from the release | Not computable |
 
 ### Encoding
@@ -451,7 +451,7 @@ The Phase 1 plan, to be compared against the implementation in Phase 2.
 | Extreme values | 12.0% exceed the IQR bound; skewness 161.0 | Winsorize at training P99 + flag |
 | `value_amount` transform | Uniform splits on a raw scale fail | $\log(1 + x)$, then StandardScaler |
 | `days_to_signing` transform | 7.6% negative, skewness −2.69 | Signed log, then StandardScaler |
-| Advertisement period | 42.2% negative, median 0 days | Rejected; replaced by decision period |
+| Advertisement period | 44.0% negative, median 0 days | Rejected; replaced by decision period |
 | Benford measure | Chi-squared grows with sample size | MAD, at least 100 earlier awards |
 | Procurement method | Ordered competition levels | Ordinal encoding 0 to 2 |
 | Procurement category | No natural order | One-hot encoding |
@@ -481,7 +481,7 @@ How each finding in the raw data shaped the strategy.
 | Award skewness 161.0; IQR bound flags 12.0% | IQR for detection; cap at P99 | [Outliers](#outlier-treatment) |
 | 1,129 zero-value awards | Flag; excluded from value indicators | [Outliers](#outlier-treatment) |
 | Supplier IDs are not stable firm IDs | Three-stage entity resolution | [Entity Resolution](#entity-resolution) |
-| Advertisement period 42.2% negative | Rejected; replaced by decision period | [Feature Engineering](#feature-engineering) |
+| Advertisement period 44.0% negative | Rejected; replaced by decision period | [Feature Engineering](#feature-engineering) |
 | Decision period valid for 94,140 awards | Indicator $f_3$ | [Feature Engineering](#feature-engineering) |
 | `parties.csv` lists extra suppliers in 79.3% of processes | Candidate indicator $f_6$ | [Feature Engineering](#feature-engineering) |
 | Three methods have under 60 tenders each | Three competition levels | [Encoding](#encoding) |
