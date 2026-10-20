@@ -32,19 +32,19 @@ The system estimates **review priority, not wrongdoing**. Red-flag indicators ar
 
 **Unsupervised risk ranking.** No dataset labels a Kenyan contract as corrupt. Framing this as supervised classification or regression would require inventing labels, making any reported accuracy meaningless.
 
-The target $Y$ is a composite risk score built from red-flag indicators, following the Corruption Risk Index (CRI) methodology [3, 4]. Each indicator $f_k$ lies in $[0, 1]$, and the score averages the indicators available for each contract:
+The target $`Y`$ is a composite risk score built from red-flag indicators, following the Corruption Risk Index (CRI) methodology [3, 4]. Each indicator $`f_k`$ lies in $`[0, 1]`$, and the score averages the indicators available for each contract:
 
 ```math
 R(c) = \frac{\sum_{k \in A(c)} w_k \, f_k(c)}{\sum_{k \in A(c)} w_k}
 ```
 
-where $A(c)$ is the set of indicators computable for contract $c$. Equal weights are the default.
+where $`A(c)`$ is the set of indicators computable for contract $`c`$. Equal weights are the default.
 
-Two components produce the ranking. A **rule-based composite index** $R(c)$ supplies transparent, literature-grounded signals and is the primary output. An **Isolation Forest** [7] complements it by detecting contracts that are unusual in the combination of their features, even where no single flag is extreme.
+Two components produce the ranking. A **rule-based composite index** $`R(c)`$ supplies transparent, literature-grounded signals and is the primary output. An **Isolation Forest** [7] complements it by detecting contracts that are unusual in the combination of their features, even where no single flag is extreme.
 
-- **Sample size ($N$):** 277,325 merged rows; the 109,163 awarded contracts form the scoring unit
-- **Feature count ($P$):** 23 raw columns in the merged working table
-- **Target ($Y$):** $R(c) \in [0, 1]$, the average of the available red-flag indicators
+- **Sample size ($`N`$):** 277,325 merged rows; the 109,163 awarded contracts form the scoring unit
+- **Feature count ($`P`$):** 23 raw columns in the merged working table
+- **Target ($`Y`$):** $`R(c) \in [0, 1]`$, the average of the available red-flag indicators
 
 ---
 
@@ -286,7 +286,7 @@ MNAR cannot be proven from data alone; this diagnosis rests on domain reasoning.
 
 **MAR columns: imputed within procurement-method groups.** The chi-square tests reject MCAR.
 
-- `dateSigned` (13.66% of awards; open 13.9%, restricted 13.0%, non-competitive 7.4%). Where it is missing, the decision-period indicator $f_3$ is dropped from $A(c)$ rather than imputed. For the Isolation Forest input `days_to_signing`, missing values are imputed with the **median within each procurement method**, recorded in a flag `signing_date_missing`. The median is used rather than the mean because the distribution is strongly skewed (−2.69).
+- `dateSigned` (13.66% of awards; open 13.9%, restricted 13.0%, non-competitive 7.4%). Where it is missing, the decision-period indicator $`f_3`$ is dropped from $`A(c)`$ rather than imputed. For the Isolation Forest input `days_to_signing`, missing values are imputed with the **median within each procurement method**, recorded in a flag `signing_date_missing`. The median is used rather than the mean because the distribution is strongly skewed (−2.69).
 - `tender_mainProcurementCategory` (722 rows, 0.26%) was expected to be MCAR, but it is missing ten times more often for restricted tenders (1.67%) than for open ones (0.17%). It is imputed with the **mode within each procurement method**. The gaps are spread over 256 buyers, with no buyer above 3.6%, so they are not one buyer's reporting habit.
 - `contractPeriod_startDate` and `contractPeriod_endDate` are also MAR, but they feed no indicator, so they are kept for display and **excluded from model inputs**. Imputing a field the model never uses adds no information.
 
@@ -300,11 +300,11 @@ MNAR cannot be proven from data alone; this diagnosis rests on domain reasoning.
 \text{Lower} = Q_1 - 1.5 \times IQR, \qquad \text{Upper} = Q_3 + 1.5 \times IQR
 ```
 
-With $Q_1 = 111{,}537$ and $Q_3 = 2{,}599{,}744$ KES, the upper bound is 6,332,053 KES and the lower bound is negative. 12.0% of awards exceed the upper bound. Capping there would truncate one award in eight, mostly legitimate large works contracts.
+With $`Q_1 = 111{,}537`$ and $`Q_3 = 2{,}599{,}744`$ KES, the upper bound is 6,332,053 KES and the lower bound is negative. 12.0% of awards exceed the upper bound. Capping there would truncate one award in eight, mostly legitimate large works contracts.
 
 **Treatment: Winsorization at the 99th percentile**, not row deletion and not IQR capping. The threshold is learned on the training set only (135,000,000 KES on the full data). A row with an extreme value still carries valid signal in every other column, so deleting it loses information. Because extreme values matter in integrity analysis, a flag `above_p99` records that a value was capped, and the raw value stays visible to auditors.
 
-**Zero-value awards** (1,129, 1.03%) are not plausible for a signed award. Each is flagged in `zero_value_award` and excluded from the value-based indicators $f_4$ and $f_5$; a zero has no first digit for Benford's law. For the Isolation Forest value input, zeros are imputed with the median within procurement category, with the flag retained.
+**Zero-value awards** (1,129, 1.03%) are not plausible for a signed award. Each is flagged in `zero_value_award` and excluded from the value-based indicators $`f_4`$ and $`f_5`$; a zero has no first digit for Benford's law. For the Isolation Forest value input, zeros are imputed with the median within procurement category, with the flag retained.
 
 ### Entity Resolution
 
@@ -318,48 +318,48 @@ The error rate is estimated on 200 hand-labelled supplier-name pairs (precision 
 
 ### Feature Engineering
 
-Five indicators enter $R(c)$, plus one candidate pending validation [4, 5, 6].
+Five indicators enter $`R(c)`$, plus one candidate pending validation [4, 5, 6].
 
-**$f_1$, direct award.** 1 if the procurement method is "direct" or "SpeciallyPermitted", else 0. These methods bypass competition; 8,800 tenders (3.4%) use them.
+**$`f_1`$, direct award.** 1 if the procurement method is "direct" or "SpeciallyPermitted", else 0. These methods bypass competition; 8,800 tenders (3.4%) use them.
 
-**$f_2$, award criteria missing.** 1 if `tender_awardCriteria` is blank, else 0.
+**$`f_2`$, award criteria missing.** 1 if `tender_awardCriteria` is blank, else 0.
 
-**$f_3$, decision period.** The days between the bidding deadline and contract signing. A very short decision period suggests the evaluation was decided in advance [3]:
+**$`f_3`$, decision period.** The days between the bidding deadline and contract signing. A very short decision period suggests the evaluation was decided in advance [3]:
 
 ```math
 d(c) = t_{\text{signed}}(c) - t_{\text{close}}(c), \qquad f_3(c) = 1 - \hat{F}_{\text{train}}\big(d(c)\big)
 ```
 
-where $\hat{F}_{\text{train}}$ is the empirical distribution function of $d$ on the training set, so shorter periods score higher. Contracts signed before bidding closed (7.6%) receive the highest scores: they are either irregular or recording errors, and both warrant review. $f_3$ **replaces the advertisement period** originally planned, which is unusable: 44.0% of tenders have a start date after the end date, and the rest have a median of 0 days. Imputing it would manufacture a signal.
+where $`\hat{F}_{\text{train}}`$ is the empirical distribution function of $`d`$ on the training set, so shorter periods score higher. Contracts signed before bidding closed (7.6%) receive the highest scores: they are either irregular or recording errors, and both warrant review. $`f_3`$ **replaces the advertisement period** originally planned, which is unusable: 44.0% of tenders have a start date after the end date, and the rest have a median of 0 days. Imputing it would manufacture a signal.
 
-**$f_4$, supplier concentration.** The share of buyer $b$'s earlier awarded value that went to supplier $s$, over an expanding window of awards dated before contract $c$, after entity resolution and excluding zero values:
+**$`f_4`$, supplier concentration.** The share of buyer $`b`$'s earlier awarded value that went to supplier $`s`$, over an expanding window of awards dated before contract $`c`$, after entity resolution and excluding zero values:
 
 ```math
 f_4(c) = \frac{\sum_{c' \in C^{\lt t}_{b,s}} v(c')}{\sum_{c' \in C^{\lt t}_{b}} v(c')}
 ```
 
-where $C^{\lt t}_{b}$ is buyer $b$'s awards before the date $t$ of contract $c$, and $C^{\lt t}_{b,s}$ the subset won by $s$. Values near 1 indicate dependence on one supplier.
+where $`C^{\lt t}_{b}`$ is buyer $`b`$'s awards before the date $`t`$ of contract $`c`$, and $`C^{\lt t}_{b,s}`$ the subset won by $`s`$. Values near 1 indicate dependence on one supplier.
 
-**$f_5$, Benford deviation.** Conformity of buyer $b$'s earlier non-zero award values to Benford's law, measured by the mean absolute deviation (MAD) of first-digit proportions:
+**$`f_5`$, Benford deviation.** Conformity of buyer $`b`$'s earlier non-zero award values to Benford's law, measured by the mean absolute deviation (MAD) of first-digit proportions:
 
 ```math
 \text{MAD}_b = \frac{1}{9}\sum_{d=1}^{9}\left|\hat{p}_{b,d} - E_d\right|, \qquad E_d = \log_{10}\!\left(1 + \tfrac{1}{d}\right)
 ```
 
-and $f_5(c) = \hat{F}_{\text{train}}(\text{MAD}_b)$. MAD is chosen over chi-squared because chi-squared grows with sample size, so large buyers would score higher for the same proportional deviation. $f_5$ requires at least 100 earlier awards.
+and $`f_5(c) = \hat{F}_{\text{train}}(\text{MAD}_b)`$. MAD is chosen over chi-squared because chi-squared grows with sample size, so large buyers would score higher for the same proportional deviation. $`f_5`$ requires at least 100 earlier awards.
 
-**$f_6$ (candidate), single supplier party.** The release has no tenderer count, so single bidding, the most validated CRI indicator [4], cannot be read directly. But 79.3% of processes list more supplier parties than winners, consistent with bidders being recorded as parties. $f_6 = 1$ if a process lists exactly one supplier party. It enters $R(c)$ only if a manual check of 50 processes against tender notices on the PPRA portal confirms that the extra parties are bidders.
+**$`f_6`$ (candidate), single supplier party.** The release has no tenderer count, so single bidding, the most validated CRI indicator [4], cannot be read directly. But 79.3% of processes list more supplier parties than winners, consistent with bidders being recorded as parties. $`f_6 = 1`$ if a process lists exactly one supplier party. It enters $`R(c)`$ only if a manual check of 50 processes against tender notices on the PPRA portal confirms that the extra parties are bidders.
 
 **Indicator coverage map.** Which integrity indicators the release can and cannot support:
 
 | Indicator | Source fields | Coverage (awarded contracts) | Status |
 |---|---|---|---|
-| $f_1$ direct award | procurement method | 100% | Used |
-| $f_2$ criteria missing | award criteria | 100% | Used |
-| $f_3$ decision period | `dateSigned`, tender end date | 86.2% | Used |
-| $f_4$ supplier concentration | value, resolved supplier | all but a buyer's first award | Used |
-| $f_5$ Benford MAD | value | buyers with at least 100 earlier awards | Used |
-| $f_6$ single supplier party | `parties.csv` | 79.3% list extra parties | Pending validation |
+| $`f_1`$ direct award | procurement method | 100% | Used |
+| $`f_2`$ criteria missing | award criteria | 100% | Used |
+| $`f_3`$ decision period | `dateSigned`, tender end date | 86.2% | Used |
+| $`f_4`$ supplier concentration | value, resolved supplier | all but a buyer's first award | Used |
+| $`f_5`$ Benford MAD | value | buyers with at least 100 earlier awards | Used |
+| $`f_6`$ single supplier party | `parties.csv` | 79.3% list extra parties | Pending validation |
 | Advertisement period | tender start and end dates | 44.0% negative | Rejected |
 | Single bidding (tenderer count) | `tender.tenderers` | absent from the release | Not computable |
 
@@ -378,36 +378,36 @@ and $f_5(c) = \hat{F}_{\text{train}}(\text{MAD}_b)$. MAD is chosen over chi-squa
 x_v(c) = \log\big(1 + \min(v(c),\, q^{\text{train}}_{0.99})\big)
 ```
 
-The Isolation Forest chooses each split value uniformly between a feature's minimum and maximum. On the raw scale, with a median of 498,150 KES and a maximum of 160.6 billion KES, almost every split would fall in the empty upper range, so the log transform genuinely changes model behaviour. $\log(1 + x)$ is used rather than $\log(x)$ because $\log(0)$ is undefined. StandardScaler ($\mu = 0$, $\sigma = 1$) does not affect the Isolation Forest, which is invariant to per-feature scaling, but it is required for PCA and the VIF screen, where unequal variances would let one feature dominate. MinMaxScaler was rejected because it is sensitive to the remaining extreme values.
+The Isolation Forest chooses each split value uniformly between a feature's minimum and maximum. On the raw scale, with a median of 498,150 KES and a maximum of 160.6 billion KES, almost every split would fall in the empty upper range, so the log transform genuinely changes model behaviour. $`\log(1 + x)`$ is used rather than $`\log(x)`$ because $`\log(0)`$ is undefined. StandardScaler ($`\mu = 0`$, $`\sigma = 1`$) does not affect the Isolation Forest, which is invariant to per-feature scaling, but it is required for PCA and the VIF screen, where unequal variances would let one feature dominate. MinMaxScaler was rejected because it is sensitive to the remaining extreme values.
 
-**`days_to_signing`: signed log, then standardize.** 7.6% of values are negative, so $\log(1 + x)$ cannot be applied. $\text{sign}(d)\log(1 + |d|)$ compresses both tails.
+**`days_to_signing`: signed log, then standardize.** 7.6% of values are negative, so $`\log(1 + x)`$ cannot be applied. $`\text{sign}(d)\log(1 + |d|)`$ compresses both tails.
 
-**Indicators $f_1$ to $f_6$** lie in $[0, 1]$ by construction, either binary or empirical-distribution scores, so they need no further scaling for $R(c)$. They are standardized only for PCA.
+**Indicators $`f_1`$ to $`f_6`$** lie in $`[0, 1]`$ by construction, either binary or empirical-distribution scores, so they need no further scaling for $`R(c)`$. They are standardized only for PCA.
 
 ### Statistical Test Matrix
 
-Because $R(c)$ is built from the indicators, correlating an indicator with $R(c)$ would be circular: the association is guaranteed by construction. Each indicator $f_k$ is therefore tested against the **leave-one-out score** $R_{-k}(c)$, which excludes $f_k$. Inputs that are not components are tested against $R(c)$. The procurement method and `days_to_signing` are tested against $R_{-1}$ and $R_{-3}$, since $f_1$ and $f_3$ are built from them.
+Because $`R(c)`$ is built from the indicators, correlating an indicator with $`R(c)`$ would be circular: the association is guaranteed by construction. Each indicator $`f_k`$ is therefore tested against the **leave-one-out score** $`R_{-k}(c)`$, which excludes $`f_k`$. Inputs that are not components are tested against $`R(c)`$. The procurement method and `days_to_signing` are tested against $`R_{-1}`$ and $`R_{-3}`$, since $`f_1`$ and $`f_3`$ are built from them.
 
 | Feature | Type | Target | Chosen / Rejected / Reason |
 |---|---|---|---|
-| $f_1$ direct award | Binary | $R_{-1}$ | **Chosen:** point-biserial $r$. **Rejected:** chi-square, which needs a categorical target. |
-| $f_2$ criteria missing | Binary | $R_{-2}$ | Same as $f_1$. |
-| $f_3$ decision-period score | Continuous, [0, 1] | $R_{-3}$ | **Chosen:** Spearman $\rho$. **Rejected:** Pearson $r$; $R$ mixes binary and rank-based components, so it is not Gaussian, and $d$ has skewness −2.69. |
-| $f_4$ supplier concentration | Continuous, [0, 1] | $R_{-4}$ | **Chosen:** Spearman $\rho$. **Rejected:** Pearson $r$; shares typically pile up at 0 and 1. |
-| $f_5$ Benford deviation | Continuous, [0, 1] | $R_{-5}$ | Same as $f_4$. |
-| $f_6$ single supplier party | Binary | $R_{-6}$ | Same as $f_1$, if validated. |
-| `value_amount` (log) | Continuous | $R$ | **Chosen:** Spearman $\rho$. **Rejected:** Pearson $r$; skewness −0.51 excluding zeros, −1.38 with them. |
-| `days_to_signing` | Continuous | $R_{-3}$ | **Chosen:** Spearman $\rho$. **Rejected:** Pearson $r$; skewness −2.69. |
-| procurement method | Ordinal, 3 levels | $R_{-1}$ | **Chosen:** Spearman $\rho$. **Rejected:** Pearson $r$; codes 0 to 2 are ranks with unequal gaps. |
-| procurement category | Nominal, 3 levels | $R$ | **Chosen:** Kruskal-Wallis $H$ with $\varepsilon^2$ effect size, plus mutual information. **Rejected:** ANOVA $F$, which assumes normal within-group distributions that a bounded, non-Gaussian $R$ violates; Pearson and Spearman, which need an ordering. |
-| `supplier_missing`, `zero_value_award` | Binary | $R$ | **Chosen:** point-biserial $r$, as for $f_1$. |
-| `is_terminated` | Binary, 0.10% positive | $R$ | **Chosen:** Mann-Whitney $U$ with rank-biserial effect size. **Rejected:** point-biserial $r$, which is unstable with only 105 positives. |
+| $`f_1`$ direct award | Binary | $`R_{-1}`$ | **Chosen:** point-biserial $`r`$. **Rejected:** chi-square, which needs a categorical target. |
+| $`f_2`$ criteria missing | Binary | $`R_{-2}`$ | Same as $`f_1`$. |
+| $`f_3`$ decision-period score | Continuous, [0, 1] | $`R_{-3}`$ | **Chosen:** Spearman $`\rho`$. **Rejected:** Pearson $`r`$; $`R`$ mixes binary and rank-based components, so it is not Gaussian, and $`d`$ has skewness −2.69. |
+| $`f_4`$ supplier concentration | Continuous, [0, 1] | $`R_{-4}`$ | **Chosen:** Spearman $`\rho`$. **Rejected:** Pearson $`r`$; shares typically pile up at 0 and 1. |
+| $`f_5`$ Benford deviation | Continuous, [0, 1] | $`R_{-5}`$ | Same as $`f_4`$. |
+| $`f_6`$ single supplier party | Binary | $`R_{-6}`$ | Same as $`f_1`$, if validated. |
+| `value_amount` (log) | Continuous | $`R`$ | **Chosen:** Spearman $`\rho`$. **Rejected:** Pearson $`r`$; skewness −0.51 excluding zeros, −1.38 with them. |
+| `days_to_signing` | Continuous | $`R_{-3}`$ | **Chosen:** Spearman $`\rho`$. **Rejected:** Pearson $`r`$; skewness −2.69. |
+| procurement method | Ordinal, 3 levels | $`R_{-1}`$ | **Chosen:** Spearman $`\rho`$. **Rejected:** Pearson $`r`$; codes 0 to 2 are ranks with unequal gaps. |
+| procurement category | Nominal, 3 levels | $`R`$ | **Chosen:** Kruskal-Wallis $`H`$ with $`\varepsilon^2`$ effect size, plus mutual information. **Rejected:** ANOVA $`F`$, which assumes normal within-group distributions that a bounded, non-Gaussian $`R`$ violates; Pearson and Spearman, which need an ordering. |
+| `supplier_missing`, `zero_value_award` | Binary | $`R`$ | **Chosen:** point-biserial $`r`$, as for $`f_1`$. |
+| `is_terminated` | Binary, 0.10% positive | $`R`$ | **Chosen:** Mann-Whitney $`U`$ with rank-biserial effect size. **Rejected:** point-biserial $`r`$, which is unstable with only 105 positives. |
 
 ### Multicollinearity Protocol
 
-- **Screen:** pairwise Spearman $|\rho| \geq 0.85$ on continuous inputs (Spearman because the inputs are skewed and bounded), with the Variance Inflation Factor (VIF) above 10 on standardized inputs as a secondary check.
-- **Decision rule:** keep the feature with higher coverage; on a tie, keep the literature-validated indicator. Association with $R(c)$ is never used as the tie-break, because that would reintroduce circularity.
-- **Pairs collinear by construction, resolved in advance:** $f_3$ is a monotone transform of `days_to_signing`, and $f_1$ is the top level of the method encoding. The Isolation Forest receives the richer variable of each pair (`days_to_signing` and the method level), while $R(c)$ uses the indicators.
+- **Screen:** pairwise Spearman $`|\rho| \geq 0.85`$ on continuous inputs (Spearman because the inputs are skewed and bounded), with the Variance Inflation Factor (VIF) above 10 on standardized inputs as a secondary check.
+- **Decision rule:** keep the feature with higher coverage; on a tie, keep the literature-validated indicator. Association with $`R(c)`$ is never used as the tie-break, because that would reintroduce circularity.
+- **Pairs collinear by construction, resolved in advance:** $`f_3`$ is a monotone transform of `days_to_signing`, and $`f_1`$ is the top level of the method encoding. The Isolation Forest receives the richer variable of each pair (`days_to_signing` and the method level), while $`R(c)`$ uses the indicators.
 
 ### Split and Leakage Prevention
 
@@ -427,11 +427,11 @@ This mirrors deployment: a model trained on history scores contracts as they arr
 
 **Transformer fit architecture.** Every learned step is fit on `X_train` only, inside `sklearn.pipeline.Pipeline` and `ColumnTransformer`:
 
-1. **Fit on `X_train` only:** impute category (mode within method) and `days_to_signing` (median within method), with flags; Winsorize value at the training 99th percentile, then $\log(1 + x)$; signed log for `days_to_signing`; fit the ordinal encoder (3 levels), one-hot encoder (drop first) and StandardScaler; fit the empirical distribution functions for $f_3$ and $f_5$; fit the Isolation Forest.
-2. **For every contract, in date order:** compute $f_4$ and $f_5$ from the buyer's awards dated before it.
-3. **Transform `X_test` without refitting:** apply all fitted transformers, then score $R(c)$ and the Isolation Forest's `decision_function`.
+1. **Fit on `X_train` only:** impute category (mode within method) and `days_to_signing` (median within method), with flags; Winsorize value at the training 99th percentile, then $`\log(1 + x)`$; signed log for `days_to_signing`; fit the ordinal encoder (3 levels), one-hot encoder (drop first) and StandardScaler; fit the empirical distribution functions for $`f_3`$ and $`f_5`$; fit the Isolation Forest.
+2. **For every contract, in date order:** compute $`f_4`$ and $`f_5`$ from the buyer's awards dated before it.
+3. **Transform `X_test` without refitting:** apply all fitted transformers, then score $`R(c)`$ and the Isolation Forest's `decision_function`.
 
-$R(c)$ is computed only from the contract's own record and from history dated before it, so no future information enters any feature.
+$`R(c)`$ is computed only from the contract's own record and from history dated before it, so no future information enters any feature.
 
 ---
 
@@ -443,20 +443,20 @@ The Phase 1 plan, to be compared against the implementation in Phase 2.
 |---|---|---|
 | Unawarded tenders | 60.6% have no award stage | Audited, not scored |
 | MNAR missingness | Missingness is itself a risk signal | Binary flag |
-| `dateSigned` (MAR) | Rate varies by method (7.4% to 13.9%) | $f_3$ unavailable; median within method + flag |
+| `dateSigned` (MAR) | Rate varies by method (7.4% to 13.9%) | $`f_3`$ unavailable; median within method + flag |
 | Category (MAR) | Restricted 1.67% vs open 0.17% | Mode within method |
 | Contract-period dates | Feed no indicator | Excluded from model inputs |
 | Missing tender dates | Cannot be placed in time | Excluded at split |
-| Zero-value awards | 1,129 implausible values | Flag; excluded from $f_4$, $f_5$ |
+| Zero-value awards | 1,129 implausible values | Flag; excluded from $`f_4`$, $`f_5`$ |
 | Extreme values | 12.0% exceed the IQR bound; skewness 161.0 | Winsorize at training P99 + flag |
-| `value_amount` transform | Uniform splits on a raw scale fail | $\log(1 + x)$, then StandardScaler |
+| `value_amount` transform | Uniform splits on a raw scale fail | $`\log(1 + x)`$, then StandardScaler |
 | `days_to_signing` transform | 7.6% negative, skewness −2.69 | Signed log, then StandardScaler |
 | Advertisement period | 44.0% negative, median 0 days | Rejected; replaced by decision period |
 | Benford measure | Chi-squared grows with sample size | MAD, at least 100 earlier awards |
 | Procurement method | Ordered competition levels | Ordinal encoding 0 to 2 |
 | Procurement category | No natural order | One-hot encoding |
 | Constant columns | Zero variance | Drop |
-| Feature-target tests | Indicators are components of $R$ | Leave-one-out score $R_{-k}$ |
+| Feature-target tests | Indicators are components of $`R`$ | Leave-one-out score $`R_{-k}`$ |
 | Train/test split | Prevent look-ahead bias | Tender end date, 66.6 / 33.4 |
 | Hyperparameter search | No labels available | TimeSeriesSplit, rank stability |
 | Buyer-history leakage | Features need buyer history | Expanding window |
@@ -482,8 +482,8 @@ How each finding in the raw data shaped the strategy.
 | 1,129 zero-value awards | Flag; excluded from value indicators | [Outliers](#outlier-treatment) |
 | Supplier IDs are not stable firm IDs | Three-stage entity resolution | [Entity Resolution](#entity-resolution) |
 | Advertisement period 44.0% negative | Rejected; replaced by decision period | [Feature Engineering](#feature-engineering) |
-| Decision period valid for 94,140 awards | Indicator $f_3$ | [Feature Engineering](#feature-engineering) |
-| `parties.csv` lists extra suppliers in 79.3% of processes | Candidate indicator $f_6$ | [Feature Engineering](#feature-engineering) |
+| Decision period valid for 94,140 awards | Indicator $`f_3`$ | [Feature Engineering](#feature-engineering) |
+| `parties.csv` lists extra suppliers in 79.3% of processes | Candidate indicator $`f_6`$ | [Feature Engineering](#feature-engineering) |
 | Three methods have under 60 tenders each | Three competition levels | [Encoding](#encoding) |
 | Log of value still skewed (−1.38) | Spearman instead of Pearson | [Statistical Test Matrix](#statistical-test-matrix) |
 
