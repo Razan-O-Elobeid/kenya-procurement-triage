@@ -335,10 +335,10 @@ where $\hat{F}_{\text{train}}$ is the empirical distribution function of $d$ on 
 **$f_4$, supplier concentration.** The share of buyer $b$'s earlier awarded value that went to supplier $s$, over an expanding window of awards dated before contract $c$, after entity resolution and excluding zero values:
 
 ```math
-f_4(c) = \frac{\sum_{c' \in C^{<t}_{b,s}} v(c')}{\sum_{c' \in C^{<t}_{b}} v(c')}
+f_4(c) = \frac{\sum_{c' \in C^{\lt t}_{b,s}} v(c')}{\sum_{c' \in C^{\lt t}_{b}} v(c')}
 ```
 
-where $C^{<t}_{b}$ is buyer $b$'s awards before the date $t$ of contract $c$, and $C^{<t}_{b,s}$ the subset won by $s$. Values near 1 indicate dependence on one supplier.
+where $C^{\lt t}_{b}$ is buyer $b$'s awards before the date $t$ of contract $c$, and $C^{\lt t}_{b,s}$ the subset won by $s$. Values near 1 indicate dependence on one supplier.
 
 **$f_5$, Benford deviation.** Conformity of buyer $b$'s earlier non-zero award values to Benford's law, measured by the mean absolute deviation (MAD) of first-digit proportions:
 
