@@ -861,7 +861,11 @@ pip install -r requirements.txt
 ### 2. Prepare the Data
 
 1. Download `kenya_ppra_full.csv.tar.gz` (approximately 55 MB) from the [Open Contracting Data Registry](https://data.open-contracting.org/en/publication/147).
-2. Place the archive in `data/raw/` and extract the five CSV files into `data/raw/full/`. Raw data is excluded from version control.
+2. Place the archive in `data/raw/` and extract it there, which creates `data/raw/full/` with the five CSV files. The Phase 1 script reads the archive; the Phase 2 code reads the extracted folder. Raw data is excluded from version control.
+
+   ```bash
+   tar -xzf data/raw/kenya_ppra_full.csv.tar.gz -C data/raw
+   ```
 
 ### 3. Reproduce the Phase 1 Data Overview
 
