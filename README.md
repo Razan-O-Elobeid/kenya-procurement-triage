@@ -1,6 +1,6 @@
 # An Explainable Risk-Triage System for Public Procurement Oversight in Kenya
 
-An explainable AI system that ranks Kenyan government contracts by integrity risk and presents them to auditors as a prioritized review queue. Built for the CMU Africa AI System Design course (04-652). Addresses UN SDG 16: Peace, Justice and Strong Institutions.
+An explainable AI system that ranks Kenyan government contracts by integrity risk and presents them to auditors as a prioritized review queue. Addresses UN SDG 16: Peace, Justice and Strong Institutions.
 
 This README contains the complete Phase 1 work: the data audit and the full preprocessing strategy. `phase1_strategy/Phase1_Strategy_Report.pdf` contains the strategy in report form; this README adds the full data overview.
 
@@ -557,3 +557,94 @@ This prints the file sizes, missingness and statistics above, and saves the six 
 5. World Bank Integrity Vice Presidency, *Most Common Red Flags of Fraud and Corruption in Procurement*. Washington, DC, USA: World Bank, 2009.
 6. Open Contracting Partnership, "Red flags in public procurement: A guide to using data to detect and mitigate risks," OCP Guidance Document. [Online]. Available: https://www.open-contracting.org/resources/red-flags-in-public-procurement-a-guide-to-using-data-to-detect-and-mitigate-risks/
 7. F. T. Liu, K. M. Ting, and Z.-H. Zhou, "Isolation forest," in *Proc. 8th IEEE Int. Conf. Data Mining (ICDM)*, Pisa, Italy, 2008, pp. 413–422.
+
+
+---
+
+## Phase 2: Implementation and Validation
+
+Phase 2 implements the Phase 1 design on the real data and tests each design decision against measured evidence. Where the evidence contradicted a Phase 1 decision, the decision was changed and the change is recorded below with the numbers behind it.
+
+### Quick start
+
+```bash
+conda activate triage            # Python 3.13, see requirements.txt
+python tests/test_resolver.py    # 23 checks: supplier entity resolution, leakage, f4
+python tests/test_pipeline.py    # 15 checks: transformers, full pipeline, leakage
+python tests/test_tuning.py      # 12 checks: anomaly injection, selection rule
+```
+
+Then run `phase2_implementation/notebooks/pipeline_execution.ipynb` top to bottom. Raw data goes in `data/raw/full/` (extracted OCDS CSV files, not tracked).
+
+### Repository layout
+
+| Path | Contents |
+|---|---|
+| `src/data.py` | Loading, merging, date parsing, temporal split |
+| `src/features.py` | `IndicatorBuilder`: indicators f1, f3, f4, f5, flags and R(c), expanding-window histories |
+| `src/entity_resolution.py` | Supplier name matching, labelling samples, evaluation, `SupplierResolver` |
+| `src/transformers.py` | `ClipGroupImputer`, `GroupModeImputer`, signed log |
+| `src/pipeline.py` | Full pipeline: indicators, `ColumnTransformer`, Isolation Forest |
+| `src/tuning.py` | Rank-stability tuning and synthetic anomaly injection |
+| `src/diagnostics.py` | Little's MCAR test, Cramér's V |
+| `tests/` | 50 synthetic checks (all pass) |
+| `data/labels/` | Hand-labeled validation samples (entity pairs, single-bidder check) |
+| `figures/` | The eight diagnostic figures (300 DPI) |
+| `results/` | Tuning grid and ranked test-period scores |
+
+### Pipeline
+
+```
+raw contracts (23 columns)
+  -> IndicatorBuilder        f1, f3, f4, f5, flags, R(c); supplier identities resolved
+  -> ColumnTransformer       value:  zeros as missing -> clip P1/P99 -> impute by category -> log(1 + x) -> scale
+                             days:   clip P1/P99 -> impute by method -> signed log -> scale
+                             method level, category (one-hot), f4, f5 (+ missing indicators), 5 flags
+  -> IsolationForest         400 trees, max_samples 256, contamination not tuned
+```
+
+Every parameter (thresholds, medians, scalers, encoders, supplier identities) is fitted on the training period only. Training covers 2018 to 2023 (72,585 awarded contracts) and the held-out test period covers 2024 to 2026 (36,399). Pipeline check: 72,585 x 23 becomes 72,585 x 14 model inputs, and 36,399 x 23 becomes 36,399 x 14, with no rows lost and no missing values.
+
+### Decision log: Phase 1 plan against Phase 2 evidence
+
+| Step | Phase 1 plan | Phase 2 evidence | Decision |
+|---|---|---|---|
+| Missingness | Missingness driven by procurement method | Little's MCAR rejected (chi-square 2,526.8, df 16); Cramér's V with method 0.02 to 0.07, with recording year 0.10 to 0.90 | Missingness treated as driven by recording period (Fig 1.1) |
+| f2, award criteria | Missing award criteria as a red flag | Field discontinued around 2021 (Cramér's V with year 0.903) | f2 removed from R(c) and the model |
+| f5, Benford | At least 100 earlier awards per buyer | Coverage 62.6% | Buyer-group fallback with minimum 10; coverage 92.9% |
+| Supplier identifier | Use `identifier_id` to confirm merges | One identifier per bid record (552,087 rows, 552,087 IDs) | Identifier step dropped |
+| Entity resolution | Token sort ratio of 90 or more, first-token blocking | Threshold 90: precision 0.54 (184-pair development set); acronym rule precision 0.35 | Stronger name cleaning, then identical cores or core score of 95 or more; blocking and acronym rule dropped |
+| Entity resolution, held-out test | 200 hand-labeled pairs | Held-out test sample (59 pairs): precision 0.98, recall 0.90, against 0.70 and 0.25 for a strict threshold on the same pairs | Adopted; 21,963 training names become 19,247 identities |
+| f6, single bidding | Pending validation | 15 of 50 sampled processes verifiable on the public portal; 15 of 15 agree (95% CI 78% to 100%); below the pre-specified minimum of 30 | f6 kept out of R(c), pending validation |
+| Contract value | Winsorize at P99, then log | Upper cap alone does not reduce skew after the log; 663 awards under 100 KES | Zeros as missing, clip at P1 (212 KES) and P99 (164.9M KES), then log; skew 137.5 to -0.23 (Fig 2.1, Fig 4.1) |
+| Days to signing | Signed log | Range -3,911 to 1,499 days; early signings concentrated in 2022 to 2023 | Clip at P1/P99 (-310, 321 days) to bound the range, then signed log; all early signings kept |
+| Flags | `above_p99` keeps the large-value signal | Clipping at P1 would erase the small-value signal; early signing needs an explicit flag | Added `below_p1` (0 < value < P1) and `is_signed_pre_closure` |
+| Collinearity | Spearman of 0.85 or more, VIF over 10 | Days and f3: rho -1.00; method and f1: rho 0.74 | f1 and f3 excluded from the model; maximum VIF falls from 15.74 to 2.49 (Fig 3.1, Fig 3.2) |
+| Feature-target tests | Leave-one-out targets | All associations small except supplier missing (r 0.29) | No feature dropped for weak association with R(c) (Fig 3.3) |
+| R(c) | Mean of available indicators, no rescaling | Mean R 0.31 with three indicators against 0.26 with four; f4 averages 0.005 while f3 and f5 average 0.5 | Definition kept for comparability; coverage effect reported as a limitation |
+| PCA | Diagnostic only | 11 of 14 components for 90% of variance, 12 for 95% | Original features kept (Fig 5.1) |
+| Model tuning | Rank stability across five time-ordered folds | Stability 0.961 to 0.993; anomaly injection added | 400 trees, max_samples 256 (stability 0.9916) |
+
+### Validation results
+
+**Anomaly injection.** Synthetic anomalies were injected into each validation fold after fitting and scored against a top-5% threshold fixed on the clean validation scores (chance level 0.05). The selected model detects contracts signed 200 days before tender close with recall 0.842, but 50-fold value inflation with recall only 0.117 (mean 0.480). A plausible explanation is that inflated values usually stay within the normal range of the whole dataset, and the model has no buyer- or category-relative value feature. Sample size trades off the two: 256 is better for the date anomaly, larger samples somewhat better for value inflation.
+
+**Test period.** With the threshold fixed on training scores, 3.1% of test contracts (1,131) are flagged, against 5.0% in training, indicating temporal drift. Model scores agree weakly with R(c) (Spearman 0.145 in training, 0.219 in test); neither is ground truth.
+
+### Limitations
+
+- No ground-truth corruption labels exist, so neither R(c) nor the anomaly score can be validated as a measure of corruption.
+- R(c) depends on which indicators are available for a contract.
+- The model is much less sensitive to inflated contract values than to early signing.
+- Entity resolution was validated on pairs, by a single labeler, on small samples; complete company renamings cannot be detected from names.
+- f6 could be verified for only 30% of sampled processes.
+- Synthetic anomalies show sensitivity to specific distortions, not to real corruption.
+
+### Planned next steps
+
+- Sensitivity analysis: rescale f4 to a percentile score and test whether R(c) still depends on indicator availability.
+- Sensitivity analysis: clipping alone against clipping plus signed log for days to signing.
+- A buyer- or category-relative value feature.
+- Bulk validation of single bidding with the procurement regulator's records.
+- Explanations for flagged contracts (SHAP), an itemized red-flag scorecard, and an audit trail.
+- Alternative detectors (Extended Isolation Forest) and checks against external watchlists.
