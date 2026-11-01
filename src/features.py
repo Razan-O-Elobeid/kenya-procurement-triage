@@ -124,7 +124,9 @@ class IndicatorBuilder(BaseEstimator, TransformerMixin):
 
     def fit(self, X, y=None):
         X = X.copy()
-        self.p99_ = X["value_amount"].quantile(0.99)
+        pos = X["value_amount"].astype(float)
+        pos = pos[pos > 0]  # zeros have their own flag
+        self.p1_, self.p99_ = pos.quantile(0.01), pos.quantile(0.99)
         self.resolver_ = (SupplierResolver().fit(normalise_names(X["supplier_name"]))
                           if self.resolve_suppliers else None)
         self.history_ = self._events(X)
@@ -172,6 +174,7 @@ class IndicatorBuilder(BaseEstimator, TransformerMixin):
         f["is_signed_pre_closure"] = (d < 0).astype(int)
         f["zero_value_award"] = (v == 0).astype(int)
         f["above_p99"] = (v > self.p99_).astype(int)
+        f["below_p1"] = ((v > 0) & (v < self.p1_)).astype(int)
         f["is_terminated"] = (X["status"] == "terminated").astype(int)
         f["supplier_missing"] = X["supplier_name"].isna().astype(int)  # display only
         f["signing_date_missing"] = X["dateSigned"].isna().astype(int)  # display only
