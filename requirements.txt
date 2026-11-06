@@ -7,3 +7,5 @@ seaborn==0.13.2
 shap==0.52.0
 rapidfuzz>=3.9
 jupyter>=1.0
+# isotree: built from source on macOS; single-threaded without OpenMP
+isotree==0.6.1.post10
