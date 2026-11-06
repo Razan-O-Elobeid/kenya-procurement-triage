@@ -9,3 +9,6 @@ __pycache__/
 venv/
 .DS_Store
 !data/labels/*.csv
+*.joblib
+*.tmp
+*.tmp
