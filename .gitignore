@@ -12,3 +12,5 @@ venv/
 *.joblib
 *.tmp
 *.tmp
+/results/
+/results/
