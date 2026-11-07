@@ -5,6 +5,8 @@ Training period only, on the shared harness folds and injections.
 Grid: ntrees {100, 200, 400} x sample_size {256, 1024, 4096} x ndim {2, 4}, seeds {0, 1}.
 Control: ndim=1, 400 trees, sample_size 256 (reported only, never selectable).
 Every other isotree parameter stays at the installed default.
+Protocol seed s is passed to isotree as random_seed = 100000 * s (seeds 0 and 100000), see the
+deviations log. The first run with seeds 0 and 1 is kept in superseded_eif_seed_overlap/.
 CP2: the whole evaluation runs twice with fresh models; the metric tables must be identical,
 otherwise nothing is saved and the exit status is 1.
 Writes only results/model_evaluation/eif_grid_by_fold.csv, eif_grid_summary.csv and
@@ -38,6 +40,10 @@ METRICS = ["stability", "recall_value", "recall_date", "recall_value_x5", "recal
            "spearman_R", "jaccard_top5_baseline"]
 STAB_MIN, WITHIN_TIE, ACROSS_TIE, GUARD = 0.95, 0.005, 0.02, 0.05  # protocol section 6
 
+# isotree seeds tree i with random_seed + i (src/fit_model.hpp:1756), so seeds 0 and 1 would
+# share all but one tree. Protocol seed s is passed as 100000 * s (deviations log, 8 Nov 2026).
+SEED_STRIDE = 100_000
+
 # the build has no OpenMP, so isotree runs on one thread and warns about the default nthreads=-1
 warnings.filterwarnings("ignore", message="Attempting to use more than 1 thread")
 
@@ -46,7 +52,7 @@ class IsoTreeEIF:
     """isotree with only ntrees, sample_size, ndim and the seed set. score() is higher = more anomalous."""
 
     def __init__(self, ntrees, sample_size, ndim, seed):
-        self.kw = dict(ntrees=ntrees, sample_size=sample_size, ndim=ndim, random_seed=seed)
+        self.kw = dict(ntrees=ntrees, sample_size=sample_size, ndim=ndim, random_seed=SEED_STRIDE * seed)
 
     def fit(self, Z):
         self.model = isotree.IsolationForest(**self.kw).fit(np.asarray(Z))
@@ -182,9 +188,12 @@ def main():
     cost = full_period_cost(X, int(pick["ntrees"]), int(pick["sample_size"]), int(pick["ndim"]))
 
     effective = isotree.IsolationForest(ntrees=int(pick["ntrees"]), sample_size=int(pick["sample_size"]),
-                                        ndim=int(pick["ndim"]), random_seed=0).get_params()
+                                        ndim=int(pick["ndim"]), random_seed=SEED_STRIDE * SEEDS[0]).get_params()
     record = {
         "protocol_section": "7.2", "seeds": list(SEEDS), "grid": GRID, "control": CONTROL,
+        "seed_mapping": f"isotree random_seed = {SEED_STRIDE} x protocol seed",
+        "isotree_random_seeds": [SEED_STRIDE * s for s in SEEDS],
+        "superseded_run": "results/model_evaluation/superseded_eif_seed_overlap/ (seeds 0 and 1 shared 399 of 400 trees)",
         "selected_within_family": {k: int(pick[k]) for k in ("ntrees", "sample_size", "ndim")},
         "selected_metrics": {m: float(pick[m]) for m in METRICS},
         "baseline_metrics": {m: float(base[m]) for m in METRICS},

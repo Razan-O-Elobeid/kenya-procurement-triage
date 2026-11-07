@@ -288,4 +288,4 @@ If a method fails any check, the report and the dashboard say that no validated 
 
 | Date | Section | Change | Reason | Seen results before change? |
 |---|---|---|---|---|
-| | | | | |
+| 8 Nov 2026 | 5, 7.2 | isotree seed s is passed as `random_seed = 100000 x s` (actual isotree seeds 0 and 100000) | isotree seeds tree i with `random_seed + i` (`src/fit_model.hpp`, line 1756), so seeds 0 and 1 shared 399 of 400 trees and seed stability was uninformative. The change restores independent seeds, as the stability metric intends. Grid, folds, injections, metrics, thresholds and selection rules are unchanged. | Yes. The first run's results were seen. The change corrects an implementation defect and does not tune the method. First-run outputs are kept in `results/model_evaluation/superseded_eif_seed_overlap/` and are not used for selection. |
