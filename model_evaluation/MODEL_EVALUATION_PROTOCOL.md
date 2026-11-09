@@ -163,24 +163,77 @@ Report rank agreement and top-5% overlap with R(c) and the baseline, and its inj
 
 ### 7.3 Feature variants (with the Isolation Forest baseline configuration)
 
-**Relative value.**
+**Relative value.** Amendment of 9 Nov 2026, committed before any relative-value run. It responds to the Phase 2 feedback (weakness 1, recommendation A). The definition below is final and is not changed after its validation results are seen.
 
-- The exact definition is written and committed as an amendment before this experiment runs. It is not changed after its validation results are seen. The amendment must state:
-  - the formula;
-  - which training-only reference it uses (for example the median log value per procurement category) and that the reference is fitted on each fold's training part only;
-  - the handling of zero, missing and clipped values, using the same P1/P99 and imputation rules as the Phase 2 value input;
-  - the handling of a missing category or a category unseen in the training part;
-  - where the feature enters the preprocessing.
-- **Decision rule (fixed now):** adopt only if `value` recall and `value_x5` recall each rise by at least 0.02, primary recall does not fall, and stability stays at least 0.95.
-- **Caveat:** the feature is designed to detect exactly the injected value distortion, so a gain is weak evidence.
+*Variants.* Two variants are tested, each as one extra model input added to the 14 Phase 2 inputs:
+
+- **(a) Buyer-relative (primary proposal, the formula recommended in the Phase 2 feedback):** `rel_buyer = log(value) - ref`, where `ref` is
+  - the median log value of the buyer's training-part awards, if that buyer has at least 5 positive-value awards in the training part;
+  - otherwise the median log value of the contract's category group in the training part, if that group has at least 5 positive-value awards there;
+  - otherwise the overall training-part median log value.
+- **(b) Category-relative (comparison, the robust form of the category z-score suggested in the feedback):** `rel_category = (log(value) - median_c) / (1.4826 x MAD_c)`, where `median_c` and `MAD_c` are the median and median absolute deviation of log value in the contract's category group in the training part. Fallbacks:
+  - if the group has fewer than 5 positive-value awards in the training part, or is unseen there, the overall training-part median and MAD are used;
+  - if the group's MAD is 0, the overall MAD is used as the denominator, with the group's own median;
+  - if the overall MAD is also 0, the denominator is 1, so the feature becomes the plain difference `log(value) - median`.
+
+*Identifiers.*
+
+- A buyer is identified by `buyer_id`, the buyer identifier already used by `IndicatorBuilder` for f4 and f5. Buyer names are not fuzzy-matched.
+- A category group is the value of `tender_mainProcurementCategory`.
+- **A missing category is its own reference group, `__missing__`,** as in the Phase 2 `ClipGroupImputer`. It is used like any other group in both variants, subject to the same minimum of 5 positive-value training awards. Only if `__missing__` has fewer than 5 such awards, or a category value does not occur in the training part at all, does the contract fall back to the overall reference.
+
+*Training-only references.*
+
+- All medians, MADs and award counts are fitted on each fold's training part only, from contracts with a positive value. For the final test they are fitted on the full training period.
+- **They are fixed summaries of the entire training part.** They are not expanding histories. Unlike f4 and f5, which use only awards strictly earlier than each contract, a buyer's median here is computed once from all of that buyer's awards in the training part.
+- For validation contracts, test contracts and injected copies, every reference award lies in the training part, which precedes them in time. So their references never include later contracts.
+- For training contracts, the reference can include awards dated later than the contract, from the same training part. This only affects the feature values the model is fitted on, never the contracts it is evaluated on.
+- Validation contracts, test contracts and injected copies are never part of any reference.
+
+*Self-inclusion.* A training contract's own value, and the values of later training awards from the same buyer, are part of its buyer's or category's median. This slightly pulls training contracts towards "typical". The minimum of 5 awards limits that effect. It is reported as a limitation. It is not leakage into evaluation, because no validation or test contract enters any reference.
+
+*Values.*
+
+- The feature is computed from the original, unclipped positive value, before the Phase 2 P1/P99 clipping.
+- Zero, negative or missing values get a relative value of 0 (typical). Zero values are already flagged by `zero_value_award`.
+- Extreme values: after computing the feature, it is clipped at its own training-part 0.1st and 99.9th percentiles (positive-value training contracts only), then standardized with a scaler fitted on the training part.
+- This replaces the earlier wording "the same P1/P99 ... rules as the Phase 2 value input". P1/P99 clipping would cap many inflated copies at the same value as ordinary large contracts.
+
+*Where it enters.*
+
+- The feature is computed in the preprocessing stage, as one extra column next to the 14 Phase 2 inputs. The Phase 2 code in `src/` is not changed.
+- Injected copies pass through the same fitted preprocessing. Their relative value is therefore recomputed from their changed value against the unchanged training references: x 50 adds log(50), about 3.9, to `rel_buyer`, and x 5 adds about 1.6.
+
+*Decision rule (unchanged):* a variant is adopted only if `value` recall and `value_x5` recall each rise by at least 0.02, primary recall does not fall, and stability stays at least 0.95.
+
+*Choosing between variants (new tie-breaker, fixed now):*
+
+- If only one variant passes the decision rule, it is adopted.
+- If both pass, the one with higher primary recall is adopted. If they are within 0.02 of each other, the buyer-relative variant is adopted.
+- If neither passes, no relative-value feature is adopted, and the result is reported.
+
+*If a variant is adopted:*
+
+- It becomes part of the input set for every model family evaluated afterwards.
+- The selected EIF configuration (400 / 256 / `ndim` 2) is re-evaluated with it on the same folds. The EIF grid is not rerun.
+
+*Caveat:* the feature is designed to detect exactly the injected value distortion, so a gain is weak evidence.
 
 **Clip-only days** (no signed log). Adopt only if primary recall rises by at least 0.02, stability falls by no more than 0.005, and the per-type guard (6.2) holds. Otherwise the Phase 2 transformation stays.
 
 ### 7.4 R(c) sensitivity: f4 as a percentile
 
-- f4 is replaced by its training-part percentile in R(c).
+Amendment of 9 Nov 2026, committed before any run. It responds to the Phase 2 feedback (weakness 2, recommendation A).
+
+- In R(c), f4 is replaced by its mid-rank percentile against the training-part f4 values:
+  - `pct(x) = (#{ref < x} + 0.5 x #{ref = x}) / #{ref}`;
+  - `ref` is the non-missing f4 values of the fold's training part (or of the full training period, at the final test).
+- **Tied zeros.** Every contract with f4 = 0 gets the same value, half the training share of zeros. For example, if 60% of reference values are 0, all zeros get 0.30. By construction, the mean percentile in the training reference is 0.5, matching the scale of f3 and f5.
+- **Zero is not missing.** Missing f4 (no supplier name, or no earlier buyer awards) stays missing. It is not converted to a percentile and is still excluded from the R(c) average.
+- f1, f3 and f5 are unchanged, and so is the model input f4 (this changes R(c) only).
 - Report the Spearman correlation and top-5% Jaccard against the current R(c), and mean R(c) by number of available indicators.
-- **Decision rule:** adopt only if the range of mean R(c) across the 2-, 3- and 4-indicator groups falls by at least half. Otherwise R(c) stays as in Phase 2, and the result is reported as a sensitivity analysis.
+- **Decision rule:** adopt only if the range of mean R(c) across the 2-, 3- and 4-indicator groups falls by at least half. This is computed on each clean validation fold and averaged. Otherwise R(c) stays as in Phase 2, and the result is reported as a sensitivity analysis.
+- If the rule is not met, the report states that the change was recommended in the feedback, shows the measured effect, and discusses why it was not adopted.
 
 ### 7.5 Reciprocal rank fusion (RRF)
 
@@ -229,6 +282,41 @@ Entries are written and committed before each experiment, after the previous che
 - the Deep SVDD centre computed from fold-training data, with no bias terms;
 - the graph built per fold from fold-training awards and the frozen resolver, with coverage reported.
 
+### 7.9 Score-drift analysis (Phase 2 feedback, weakness 4)
+
+Added 9 Nov 2026. The question: why did only 3.1% of test-period contracts exceed the training top-5% threshold?
+
+**(a) Training-period check (may inform the report; changes no model or threshold).**
+
+- For each validation fold, compute the share of clean validation contracts above the 95th percentile of the fold's own training scores. Do this for the frozen baseline configuration and for the selected EIF configuration.
+- Compare fold training parts with validation folds on:
+  - the standardized mean difference of each model input;
+  - f4 and f5 coverage;
+  - the pre-closure share;
+  - the f3 distribution.
+- This shows whether a below-5% rate in later periods is systematic. For example, it could happen if history-based features change as histories grow.
+
+**(b) Test-period description (descriptive only).**
+
+- Using only the Phase 2 baseline's already-seen test scores and test inputs: the flagged share by month, and the same input comparisons as in (a), between the training and test periods.
+- It is run only after `MODEL_SELECTION_FREEZE.md` is committed (19 Nov), so it cannot influence selection, features or thresholds.
+- Thresholds are not recalibrated on test data.
+
+### 7.10 Entity-resolution evaluation, expanded sample (Phase 2 feedback, weakness 3)
+
+Added 9 Nov 2026.
+
+- **Sample.** At least 141 new decidable pairs are added to the 59 held-out pairs of Phase 2, for at least 200 in total.
+  - Pairs are drawn with a fixed seed, from the same candidate-pair strata as the Phase 2 held-out sample (85-90, 90-95, 95-100, exact core).
+  - Any pair already in the development set (`entity_pairs_labelled.csv`) or the Phase 2 held-out set (`entity_pairs_fresh_labelled.csv`) is excluded.
+- **Labelling.** Labels are given blind to similarity scores and to the resolver's decision. The score columns are hidden in the file to label. The label values and web-search rule are the same as in Phase 2.
+- **No re-tuning.** The resolver (Option A) is not changed or re-tuned on these pairs. They are for evaluation only.
+- **Reported:**
+  - precision, recall and false-match rate, stratum-weighted with 95% bootstrap intervals, as in Phase 2;
+  - exact Clopper-Pearson intervals for identical cores and for fuzzy matches;
+  - results for the new pairs alone and for all held-out pairs combined.
+- **Remaining limitation:** a single labeller.
+
 ## 8. Explainability validation
 
 An attribution method is called **validated** for a model only if it passes all of the checks below, on the top 5% of fold 5's clean validation set (about 605 contracts).
@@ -242,7 +330,7 @@ An attribution method is called **validated** for a model only if it passes all 
 Fixed settings:
 
 - background data: 100 rows of the fold-training matrix, sampled with the stated seed;
-- inputs: the 14 model inputs;
+- inputs: the model's input columns, which are the 14 Phase 2 inputs, plus the relative-value column if a variant is adopted under section 7.3 (15 inputs);
 - method for isotree: SHAP permutation explainer.
 
 Known limitation: model-agnostic SHAP with an independent background treats features as independent. That assumption does not hold for, for example, `days_to_signing` and `is_signed_pre_closure`. This is reported with the results.
