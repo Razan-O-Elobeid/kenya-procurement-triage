@@ -274,6 +274,19 @@ RRF is reported with the same metrics. It is deployed only if it wins under the 
 
 ### 7.6 Autoencoder, 7.7 Deep SVDD, 7.8 buyer-supplier graph
 
+**Scope decision, 11 Nov 2026 (no results seen).** The autoencoder, Deep SVDD and the graph model are deferred, not abandoned. Clip-only days (7.3) and the PCA reconstruction control are also deferred. No detailed entry is committed for them now. Priority goes to explanation validation (section 8), the remaining essential evaluation work and the auditor dashboard, to protect the modelling cutoff and time for technical evaluation preparation.
+
+Deferred work may resume only if all of the following hold, before the 18 Nov modelling cutoff:
+
+1. the project owner explicitly approves it;
+2. a realistic time budget is agreed;
+3. a protocol amendment with the detailed entry and its timebox is committed before any implementation or run;
+4. the owner confirms that no essential deadline and no planned study time is threatened.
+
+After the 19 Nov freeze, model selection is not reopened. Any later model experiment is labelled exploratory and cannot change the deployed model.
+
+Any reduction in the scope of committed work (for example the comparisons in 7.9(a)) is documented in this protocol and in the deviations log before the reduced version is implemented. A reduced check is reported as reduced, never as complete.
+
 Entries are written and committed before each experiment, after the previous checkpoint passes (section 9). Planned constraints:
 
 - early stopping on the last 10% (by date) of each fold's training part, never on the validation fold;
@@ -337,6 +350,72 @@ Known limitation: model-agnostic SHAP with an independent background treats feat
 
 If a method fails any check, the report and the dashboard say that no validated attribution exists for that model. The dashboard then shows only the itemized red-flag scorecard and historical comparisons for it. A failing method is never shown as if it were validated, and no other method is substituted silently.
 
+### 8.1 Fixed explainer settings (amendment of 11 Nov 2026)
+
+Committed before any explanation was computed. These settings apply to every model explained under section 8: the frozen Isolation Forest, EIF, and any model added later by protocol amendment. The checks and thresholds in section 8 are unchanged. Explanation results decide deployment eligibility only, never scientific ranking.
+
+**Source facts (`shap` 0.52.0, inspected 11 Nov 2026):**
+
+- In `shap/explainers/_permutation.py`, the default `max_evals` is 500, and the `"auto"` setting gives 10 x 2 x d evaluations.
+- Each contract gets `max_evals // (2m + 1)` forward-and-backward permutations, where m is the number of inputs that vary for that contract against the background.
+- Permutation order comes from numpy's global random generator. It is seeded by `np.random.seed(seed)` when the explainer is constructed.
+- Forward-and-backward evaluation makes the attributions add up to the explained output minus the background mean output, so check 1 is meaningful.
+- For a scikit-learn `IsolationForest`, `TreeExplainer` explains the mean path length E[h(x)], where higher means more normal. It does not explain `score_samples` or the harness ranking score.
+- The harness ranking score is `-score_samples(x)` = 2^(-E[h(x)]/c(256)), a strictly decreasing function of E[h(x)].
+- Checked on synthetic data with the pinned versions. The implementation's unit tests check these facts again before any run.
+
+**Explained outputs (model outputs, kept separate from the attribution methods).** A positive attribution always means the input pushes the contract towards "more anomalous".
+
+- **Frozen Isolation Forest:** the anomaly depth a(x) = −E[h(x)]. It is a strictly increasing function of the ranking score, so check 2 expects a rank correlation of +1.0. TreeExplainer attributions are negated to match this direction. For check 3, the permutation explainer explains the same a(x), computed exactly from `score_samples`.
+- **EIF:** isotree's standardized outlier score, which is the ranking score itself.
+- **Any later model:** its ranking score, unless its amendment states otherwise.
+
+**Explained set.** The top 5% of fold 5's clean validation set by the model's ranking score. The model is the seed 0 configuration fitted on fold 5's training part.
+
+**Background.** For run s in {0, 1}:
+
+- 100 rows of fold 5's training matrix are drawn without replacement with `np.random.default_rng(s)`;
+- the permutation explainer receives them as `shap.maskers.Independent(background, max_samples=100)`, so SHAP does no further subsampling;
+- TreeExplainer receives the same 100 rows (below).
+
+**Permutation explainer.**
+
+- `shap.explainers.Permutation(output_function, masker, seed=s)` is constructed immediately before its single call on the explained set.
+- No other code draws from numpy's global random generator between construction and that call.
+- **`max_evals = 10 x (2d + 1)`**, where d is the number of model input columns (for example, 290 if d = 14). Every contract therefore gets at least 10 full forward-and-backward permutations, and more when some inputs do not vary against the background. The number of permutations and m are recorded for each contract.
+- Other call settings: `batch_size="auto"`, `main_effects=False`, `error_bounds=False`.
+- **Why this budget:** it fixes the number of evaluations explicitly instead of relying on the library default. It matches the ten-permutation intent of SHAP's own `"auto"` setting while guaranteeing at least ten permutations (`"auto"` gives nine when all inputs vary).
+- **No change after results.** The budget is not raised or lowered after any result, including any timing result.
+
+**TreeExplainer (frozen Isolation Forest only).**
+
+- Setting: `shap.TreeExplainer(model, data=background, feature_perturbation="interventional")`, with the 100-row background of run s, on the same explained set.
+- It is evaluated on checks 1, 2, 4 and 5 and the exact repeat. Check 4 is computed as written, from the s = 0 and s = 1 backgrounds.
+- Section 8 limits check 3 to model-agnostic methods, so it is reported as "not applicable by definition" for TreeExplainer, never as passed.
+
+**Check 3 (method agreement).**
+
+- The permutation explainer and TreeExplainer both explain a(x) on the frozen Isolation Forest, using the same s = 0 background rows.
+- For each contract, the three inputs with the largest absolute attributions are compared, and the mean overlap out of 3 is reported.
+- The two methods are compared only on the same explained quantity. If that cannot be arranged, check 3 is reported as not comparable, and the permutation method is not validated.
+
+**Exact repeat (reproducibility, separate from check 4).** Run s = 0 is executed twice. The attribution arrays and base values must be bit-identical, otherwise the explanation is reported as not reproducible and is not validated.
+
+**Timing (check 5), run first, before any full explanation run.**
+
+- The wall-clock time of constructing the explainer and explaining the 20 highest-scoring contracts of the explained set, with s = 0, is measured on the MacBook Air. It is extrapolated linearly: time for 20 x (explained-set size / 20).
+- If the extrapolation exceeds 30 minutes, the feasibility failure is recorded and nothing more is run for that model and method. Checks not run are reported as "not run (feasibility failed)", and the method is not validated.
+- A full-set runtime is recorded only if a full run takes place.
+- Thread settings are recorded: scikit-learn Isolation Forest as in the harness (`n_jobs=-1`), isotree on one thread (no OpenMP).
+
+**No inferred validation, and no deployment without it.**
+
+- Every model considered for deployment, including the frozen baseline, must pass its own checks. One model's result is never carried over to another.
+- A model without a validated explanation is never called deployed or deployment-eligible. This also holds where 6.3 says the baseline stays the deployed model.
+- If no model meets both 6.3 targets, no model is deployment-eligible. The dashboard is then presented as a local auditor prototype, not a validated model deployment. Its queue shows the frozen scores of the best-ranked family under the scientific ranking of 6.3, labelled as having no validated explanation. It also shows the itemized scorecard, every frozen model's score and rank in the audit trail, and the limitations.
+- The report states that no validated model deployment was achieved.
+- Model-selection rules are unchanged.
+
 ## 9. Checkpoints
 
 | ID | Condition to pass | If it fails |
@@ -349,6 +428,8 @@ If a method fails any check, the report and the dashboard say that no validated 
 | CP5 | Graph experiment working by 16 Nov | Stop; write a feasibility note |
 | Hard stop | 18 Nov: unfinished experiments are reported as attempted | Dashboard work starts regardless |
 | Freeze | 19 Nov: `model_evaluation/MODEL_SELECTION_FREEZE.md` written and committed | No test scoring before this |
+
+Status 11 Nov 2026: CP3, CP4 and CP5 are deferred (see the scope decision in section 7.6). Their conditions are unchanged if the work resumes.
 
 ## 10. Freeze and final test
 
@@ -377,3 +458,4 @@ If a method fails any check, the report and the dashboard say that no validated 
 | Date | Section | Change | Reason | Seen results before change? |
 |---|---|---|---|---|
 | 8 Nov 2026 | 5, 7.2 | isotree seed s is passed as `random_seed = 100000 x s` (actual isotree seeds 0 and 100000) | isotree seeds tree i with `random_seed + i` (`src/fit_model.hpp`, line 1756), so seeds 0 and 1 shared 399 of 400 trees and seed stability was uninformative. The change restores independent seeds, as the stability metric intends. Grid, folds, injections, metrics, thresholds and selection rules are unchanged. | Yes. The first run's results were seen. The change corrects an implementation defect and does not tune the method. First-run outputs are kept in `results/model_evaluation/superseded_eif_seed_overlap/` and are not used for selection. |
+| 11 Nov 2026 | 7.3, 7.6 to 7.8, 8, 8.1, 9 | Autoencoder, Deep SVDD, graph model, clip-only days and the PCA control deferred, with a resumption rule. Fixed explainer settings added (8.1): explained outputs and their direction; TreeExplainer for the baseline in interventional mode with the section 8 backgrounds; timing run first, with a stop if the extrapolated time exceeds 30 minutes; no model called deployment-eligible without its own validated explanation | Protect section 8, the essential evaluation work, the dashboard and evaluation preparation time; make check 4 applicable to the baseline and check 3 compare like with like; fix all explanation settings before any explanation is computed | No. None of the deferred experiments had been run, and no explanation had been computed. The output and direction facts come from a synthetic-data check only. |
