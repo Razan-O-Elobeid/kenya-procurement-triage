@@ -99,7 +99,17 @@ if page == "Queue":
     cols = [f"rank_{model}", "ocid", "buyer_name", "supplier_name", "tender_mainProcurementCategory",
             "tender_procurementMethod", "value_amount", "tender_tenderPeriod_endDate", f"score_{model}",
             "R", "review_status"]
-    st.dataframe(q[cols], hide_index=True, width="stretch")
+    shown = q[cols].rename(columns={f"rank_{model}": "Rank", "ocid": "Contract ID", "buyer_name": "Buyer",
+                                    "supplier_name": "Supplier", "tender_mainProcurementCategory": "Category",
+                                    "tender_procurementMethod": "Method", "value_amount": "Value",
+                                    "tender_tenderPeriod_endDate": "Tender closed", f"score_{model}": "Score",
+                                    "R": "R(c)", "review_status": "Review status"})
+    shown["Supplier"] = shown["Supplier"].fillna("(missing)")
+    shown["Tender closed"] = shown["Tender closed"].astype(str).str[:10]
+    st.dataframe(shown, hide_index=True, width="stretch",
+                 column_config={"Value": st.column_config.NumberColumn(format="localized"),
+                                "Score": st.column_config.NumberColumn(format="%.4f"),
+                                "R(c)": st.column_config.NumberColumn(format="%.3f")})
     st.download_button("Export this list (CSV)", q[cols].to_csv(index=False), f"shortlist_{bundle}_{model}.csv")
     if len(q):
         pick = st.selectbox("Open contract", q["row_id"].tolist(), format_func=contract_label, key="queue_pick")

@@ -1,0 +1,10 @@
+# local auditor dashboard settings
+[server]
+address = "localhost"     # only this computer can open the app, not others on the same network
+showEmailPrompt = false
+
+[browser]
+gatherUsageStats = false  # no usage statistics sent to Streamlit
+
+[client]
+toolbarMode = "viewer"    # hides the Deploy button and developer options
