@@ -171,6 +171,42 @@ The end-to-end figure is the sum of the separately timed stages.
 
 **Provisional status.** EIF is the leader among the families evaluated so far. The cross-family selection is made on 18 November, after the remaining families, and frozen on 19 November.
 
+## Update: explanation validation (protocol 8 and 8.1), completed 11 Nov 2026
+
+Code `b04ca10`, protocol amendment `72c8567`. Fold 5, explained set of 605 contracts per model, d = 14, `max_evals` = 290, backgrounds of 100 training rows (seeds 0 and 1). shap 0.52.0, scikit-learn 1.6.1, numpy 2.1.3, isotree 0.6.1.post10, MacBook Air. Result files are in `results/model_evaluation/explanations/` (not tracked in Git).
+
+| Check | Requirement | IF 400 / 256, TreeExplainer (interventional) | EIF 400 / 256 / ndim 2, permutation SHAP |
+|---|---|---|---|
+| 1 Additivity, largest relative error | at most 1e-6 | 2.75e-8 | 2.72e-15 |
+| 2 Correct target | identical ranks | yes (Spearman 1.0) | yes (Spearman 0.9999999999999999, float rounding) |
+| 3 Method agreement, mean top-3 overlap | at least 2 of 3 | not applicable by definition | 2.98 |
+| 4 Stability, mean Spearman (undefined correlations) | at least 0.9 | 0.945 (0) | 0.917 (0) |
+| 5 Time, extrapolated from 20 contracts | under 30 min | 19.6 s (actual full run 8.6 s) | 7.4 min (actual full runs 7.4, 7.5 and 6.9 min) |
+| Exact repeat | bit-identical | yes | yes |
+
+- The IF explanation explains a(x) = -E[h(x)], the negated mean path length, which has the same ranks as the ranking score. The EIF explanation explains the ranking score itself.
+- Check 3 was computed on the IF, where TreeExplainer is exact. The permutation run was additive to 2.9e-15; its 20-contract timing extrapolated to 2.8 min, and the full run took 1.8 min.
+- **Both explanation methods are validated under section 8.** This meets one of the two deployment targets in 6.3. It does not select a model. No model is called deployed until the cross-family selection (18 Nov) and the freeze (19 Nov), after RRF (7.5), face validity (7.1) and confirmation of the full training-period fit time.
+- Limitations: EIF stability has the smallest margin (0.917 against 0.9). EIF has no exact reference, so its validation rests on the method's agreement on the IF plus its own checks. SHAP with an independent background treats inputs as independent, which does not hold for `days_to_signing` and `is_signed_pre_closure`.
+- This update supersedes the bullet in section 7 stating that EIF is not yet deployable for lack of a validated explanation.
+
+## Update: entity-resolution evaluation, expanded sample (protocol 7.10), completed 13 Nov 2026
+
+Code `3a276b4`; sample drawn and committed before labelling (`14a4264`, 11 Nov); labels `c2a3453`. Option A, merge rule core score 95+, not re-tuned. 160 new pairs (40 per stratum, seed 2), labelled blind to scores and strata: 94 same business, 61 different, 5 undecidable (155 decidable). The Phase 2 candidate population was reproduced exactly before sampling. Result file: `results/model_evaluation/entity_resolution_expanded.json` (not tracked in Git).
+
+| Sample | Decidable pairs | Precision at 95 | Recall at 95 | False-match rate at 95 |
+|---|---|---|---|---|
+| Phase 2 held-out alone | 59 | 0.981 [0.942, 1.000] | 0.895 [0.774, 1.000] | 0.003 |
+| New pairs alone | 155 | 0.993 [0.978, 1.000] | 0.634 [0.502, 0.789] | 0.001 |
+| Combined | 214 | 0.989 [0.973, 1.000] | 0.690 [0.566, 0.826] | 0.002 |
+
+Stratum-weighted estimates with 95% bootstrap intervals. Exact Clopper-Pearson intervals (combined): identical cores 54/54 [0.93, 1.00]; fuzzy cores 95 to 99 53/55 [0.87, 1.00]. New pairs alone: 39/39 [0.91, 1.00] and 39/40 [0.87, 1.00].
+
+- **Precision is confirmed:** merged names are almost always the same business. The one new false merge differs by a single letter (KABUTECH / KAHUTECH).
+- **Phase 2's recall estimate was optimistic relative to the expanded sample.** About a third of same-business candidate pairs are not merged. They lie mostly in the 90 to 95 band (14 of 36 same business, a mixed band no threshold separates) and in the large 85 to 90 band (2 of 40, but 19,241 pairs). At threshold 90, precision falls to 0.69 [0.64, 0.75], so lowering the threshold is not a remedy. No re-tuning was done (7.10).
+- **Effect on the system:** missed merges can fragment supplier histories and underestimate `f4_supplier_concentration` for the suppliers concerned. False merges, which could overstate it, are rare. The overall effect on IF and EIF rankings and alerts has not been separately quantified.
+- **Limitations:** recall covers only candidate pairs (core score 85+), so true recall can only be lower; the 85 to 90 estimate rests on 2 positive pairs; the 5 undecidable pairs are excluded and are probably among the hardest cases; single labeller.
+
 ## 8. Planned work and milestones
 
 Planned items have not been run. Each experiment is pre-registered (committed) before it runs.
