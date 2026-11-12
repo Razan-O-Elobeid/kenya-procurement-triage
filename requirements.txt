@@ -9,3 +9,4 @@ rapidfuzz>=3.9
 jupyter>=1.0
 # isotree: built from source on macOS; single-threaded without OpenMP
 isotree==0.6.1.post10
+streamlit==1.66.1
