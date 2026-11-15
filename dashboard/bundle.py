@@ -58,7 +58,8 @@ def contract_table(F, supplier_resolved, scores, train_scores, thresholds):
     return t.reset_index(drop=True)
 
 
-def check_explanations(saved, contracts, model, names, score, output, validated):
+def check_explanations(saved, contracts, model, names, score, output, validated,
+                       pos_col="position_in_fold5_validation"):
     """Integrity of saved attributions against this bundle. Returns (rows or None, report).
 
     Rows are matched by position and contract id, for the given model. Scores and explained
@@ -67,14 +68,14 @@ def check_explanations(saved, contracts, model, names, score, output, validated)
     """
     rep = {"model": model, "section8_validated": bool(validated), "passed": False}
     attr = [f"attr__{n}" for n in names]
-    need = ["contract_id", "position_in_fold5_validation", "ranking_score", "explained_output", "base"]
+    need = ["contract_id", pos_col, "ranking_score", "explained_output", "base"]
     if not validated:
         rep["reason"] = "explanation method not validated under section 8"
         return None, rep
     if not set(need) <= set(saved.columns) or [c for c in saved.columns if c.startswith("attr__")] != attr:
         rep["reason"] = "columns or input order differ from the bundle's inputs"
         return None, rep
-    pos = saved["position_in_fold5_validation"].to_numpy()
+    pos = saved[pos_col].to_numpy()
     if len(set(pos)) != len(pos) or pos.min() < 0 or pos.max() >= len(contracts):
         rep["reason"] = "positions missing, repeated or out of range"
         return None, rep

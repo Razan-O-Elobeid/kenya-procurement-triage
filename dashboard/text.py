@@ -27,6 +27,7 @@ def label(name):
 
 
 MODEL_NAMES = {"if": "Isolation Forest 400 / 256 (baseline)", "eif": "Extended Isolation Forest 400 / 256 / ndim 2",
+               "rrf": "Reciprocal rank fusion of R(c), IF and EIF (reporting only)",
                "R": "Composite red-flag score R(c)"}
 
 STATUSES = ["new", "under review", "cleared", "escalated"]
