@@ -207,6 +207,87 @@ Stratum-weighted estimates with 95% bootstrap intervals. Exact Clopper-Pearson i
 - **Effect on the system:** missed merges can fragment supplier histories and underestimate `f4_supplier_concentration` for the suppliers concerned. False merges, which could overstate it, are rare. The overall effect on IF and EIF rankings and alerts has not been separately quantified.
 - **Limitations:** recall covers only candidate pairs (core score 85+), so true recall can only be lower; the 85 to 90 estimate rests on 2 positive pairs; the 5 undecidable pairs are excluded and are probably among the hardest cases; single labeller.
 
+## Update: training-period drift check (protocol 7.9(a)), completed 13 Nov 2026
+
+Code `171b773`. Five chronological folds, training period only (72,585 contracts); the test period was not loaded. Frozen baseline (IF 400 / 256) and selected EIF (400 / 256 / ndim 2), seed 0, refitted on each fold's training part. Threshold: the 95th percentile of each fold's own training scores. Descriptive only: no model, feature, threshold or rule was changed. Result files are in `results/model_evaluation/drift_training_period/` (not tracked in Git).
+
+**Share of validation contracts above the fold's training threshold** (5% expected without drift; each validation fold holds 12,097 contracts)
+
+| Fold | Training contracts | IF | EIF |
+|---:|---:|---:|---:|
+| 1 | 12,100 | 0.088 | 0.069 |
+| 2 | 24,197 | 0.064 | 0.058 |
+| 3 | 36,294 | 0.042 | 0.041 |
+| 4 | 48,391 | 0.045 | 0.043 |
+| 5 | 60,488 | 0.035 | 0.034 |
+
+**Input and indicator shifts** (training part, then validation fold)
+
+| Fold | f4 coverage | f5 coverage | Pre-closure share | f3 median | Largest SMDs (validation against training) |
+|---:|---|---|---|---|---|
+| 1 | 0.512, 0.479 | 0.777, 0.923 | 0.026, 0.036 | 0.498, 0.523 | works -0.84; f5 missing -0.42; services +0.21 |
+| 2 | 0.495, 0.631 | 0.850, 0.953 | 0.031, 0.055 | 0.496, 0.619 | works -0.81; f5 missing -0.35; f4 missing -0.28 |
+| 3 | 0.541, 0.907 | 0.884, 0.972 | 0.039, 0.058 | 0.499, 0.568 | f4 missing -0.90; works -0.53; f5 missing -0.34 |
+| 4 | 0.632, 0.823 | 0.906, 0.967 | 0.044, 0.087 | 0.497, 0.623 | works -0.48; f4 missing -0.44; days to signing -0.30 |
+| 5 | 0.670, 0.555 | 0.918, 0.980 | 0.052, 0.060 | 0.497, 0.585 | f5 missing -0.29; f5 +0.26; f4 missing +0.24 |
+
+- **The below-5% rate is systematic in the later folds.** Both models exceed 5% in folds 1 and 2 and fall below it in folds 3 to 5, reaching about 3.5% in fold 5. The Phase 2 test-period rate (3.1%, threshold from the full training period) is consistent with this pattern. That is a consistency observation, not a proof that the same causes operate in the test period.
+- **Distribution shift is present in every fold.** Shifts are largest in the early folds (|SMD| up to 0.84 to 0.90) and smallest in fold 5 (at most 0.29).
+- **Shifts run in both directions.** Validation contracts have fewer missing history features in most folds (f5 coverage is higher in every fold), a lower share of works in folds 1 to 4, a higher pre-closure share in every fold, and shorter decision periods (f3 median 0.52 to 0.62; f3 is higher for shorter periods). f4 coverage moves up in folds 2 to 4 and down in folds 1 and 5.
+- **Cause not established.** A plausible reading is that, as histories grow, fewer new contracts have missing history features, which the models treat as unusual. This was not tested: the change in the flagged share was not decomposed by input, and timing indicators moved in the opposite direction.
+- **Implication for deployment:** with a threshold fixed on training scores, the flagged share of new contracts may stay below 5%, so reviewer workload should be estimated from the observed share. Thresholds are not recalibrated (protocol 7.9).
+- **Limitations:** seed 0 only; SMD compares one input at a time, while the models use joint patterns; folds contain equal numbers of contracts, not equal time spans; f4 coverage varies for reasons not examined; 7.9(b) (test period, descriptive) runs only after the freeze.
+
+## Update: reciprocal rank fusion (protocol 7.5), completed 14 Nov 2026
+
+Code `a566c1c`; protocol clarification `99fb2b4` (13 Nov, committed before any RRF score was computed). Components: R(c), the frozen IF 400 / 256 and the selected EIF 400 / 256 / ndim 2. Equal weights, k = 60. Ranks `1 + #{fold training-part scores > s}`, so no validation contract affects another's score. Recall cut-off: the 95th percentile of clean validation RRF scores, strictly greater, as in the harness. Seeds {0, 1} apply to the IF and the EIF; R(c) is deterministic. Injected copies use recomputed f3 and R(c). Result files: `results/model_evaluation/rrf_by_fold.csv` and `rrf_result.json` (not tracked in Git). 39 synthetic tests in `tests/test_rrf.py`.
+
+Integrity checks, all passed: EIF confirmed as the eligible third component from `eif_selection.json` and `explanations/explain_validation.json`; the IF and EIF components reproduce CP1 and the stored EIF grid row (largest difference 1.1e-16); injected model inputs match the recomputed indicator frames exactly; R(c) has no missing values; two full runs give identical tables. The share of clean validation contracts above the cut-off is 0.05 in every fold, so ties at the cut-off play no part.
+
+**Fold means**
+
+| Method | Stability | Value x 50 | Date | Value x 5 | Primary |
+|---|---:|---:|---:|---:|---:|
+| IF 400 / 256 (frozen baseline) | 0.9916 | 0.117 | 0.842 | 0.060 | 0.480 |
+| EIF 400 / 256 / ndim 2 | 0.9893 | 0.181 | 0.852 | 0.070 | 0.516 |
+| RRF (R(c), IF, EIF) | 0.9968 | 0.116 | 0.753 | 0.062 | 0.434 |
+
+**RRF per fold**
+
+| Fold | Stability | Value x 50 | Date | Value x 5 | Primary | Top-5% Jaccard with IF | Top-5% Jaccard with EIF |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 0.9956 | 0.116 | 0.749 | 0.069 | 0.433 | 0.751 | 0.651 |
+| 2 | 0.9944 | 0.098 | 0.776 | 0.060 | 0.437 | 0.549 | 0.539 |
+| 3 | 0.9972 | 0.079 | 0.890 | 0.050 | 0.484 | 0.818 | 0.762 |
+| 4 | 0.9979 | 0.112 | 0.622 | 0.081 | 0.367 | 0.774 | 0.721 |
+| 5 | 0.9988 | 0.174 | 0.728 | 0.050 | 0.451 | 0.660 | 0.580 |
+
+- **Not selected.** Stability passes (0.9968). Date recall is 0.089 below the frozen baseline, beyond the 0.05 per-type guard (6.2), so RRF cannot rank above EIF under the 7.5 clarification. Primary recall is also 0.082 below EIF and 0.045 below the baseline. **EIF remains the provisional scientific leader.**
+- **Lower on both types, not a trade-off in substance.** The rule category for a guard failure is "reported as a trade-off", but RRF is no better than the baseline on value recall (0.116 against 0.117) and lower on date recall.
+- **RRF would not have been deployable in any case:** section 8 has no explanation method for it.
+- **Likely reason (our reading, not separately tested):** R(c) carries a third of the fused rank but is weak on these injections (primary 0.144). It cannot see value copies at all, because f1, f3, f4 and f5 do not depend on a contract's own value; a value copy keeps the R(c) rank of its original row. For date copies R(c) responds through the recomputed f3, but more weakly than the models.
+- **Higher stability is expected,** from a deterministic component and rank averaging. It is not evidence of better detection.
+- **The top list differs noticeably** from both models (top-5% Jaccard 0.55 to 0.82 with the IF, 0.54 to 0.76 with the EIF).
+- **Limitations:** synthetic recall measures sensitivity to two artificial distortions, which R(c) partly cannot see by construction. RRF's lower recall therefore does not show that it is worse at finding real risk; there are no labels to test that. Equal weights and k = 60 were fixed in advance and not varied.
+- **At the final test,** RRF is refitted and scored once for reporting only, as section 7.5 specifies (training-period reference ranks; threshold at the 95th percentile of training-period RRF scores, fixed before the test period is scored).
+
+## Update: final-evaluation rehearsal on the training period (protocol 10, dry run), completed 16 Nov 2026
+
+**This is a rehearsal, not the final evaluation.** No test-period data was loaded. Fold 5 of the training period stands in for the test period: the models are fitted on fold 5's training part (60,488 contracts) and score fold 5's validation part (12,097 contracts).
+
+Protocol clarification 10 at `635738b`; code at `9cb30b5` (`model_evaluation/final_eval.py`, `dashboard/build_final_bundle.py`). Tests: final evaluation 50/50, dashboard 27/27, on the owner's Mac. Command: `python -m model_evaluation.final_eval --dry-run --freeze model_evaluation/freeze_dryrun.json`. `freeze_dryrun.json` is a rehearsal file, not the freeze. Outputs: `results/final_test_dryrun/` and `results/dashboard/final_dryrun/` (not tracked in Git).
+
+| Model | Flagged | Share above the training threshold | Explanation time | Additivity | Exact repeat |
+|---|---:|---:|---:|---|---|
+| IF 400 / 256 | 426 | 0.0352 | 0.1 min | passed | passed |
+| EIF 400 / 256 / ndim 2 | 415 | 0.0343 | 5.1 min | passed | passed |
+| RRF (R(c), IF, EIF) | 387 | 0.0320 | not explained (reporting only) | | |
+
+- **Every integrity check passed,** and IF and EIF attributions are shown for every flagged contract.
+- **Consistent with earlier, separately coded results:** the shares match the 7.9(a) drift check for fold 5 (IF 0.035, EIF 0.034), and the flag counts match the development bundle (426 and 415).
+- **Timing for the final run:** EIF explanations took 5.1 min for 415 contracts, about 0.74 s each. At the final test the IF is expected to flag the 1,131 contracts flagged in Phase 2; if EIF flags a similar number, its explanations should take roughly 14 min, under the 30-minute target of section 6.3. This is an extrapolation, not a measurement.
+- **Not tested by the rehearsal:** the real-run gate on a committed `model_freeze.json`, the Phase 2 reproduction check and the test-period data load. These are covered by synthetic tests only and are exercised for the first time on 20 Nov.
+
 ## 8. Planned work and milestones
 
 Planned items have not been run. Each experiment is pre-registered (committed) before it runs.
