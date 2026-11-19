@@ -1,0 +1,14 @@
+{
+  "note": "the freeze (protocol 10); commit on 19 Nov 2026 together with MODEL_SELECTION_FREEZE.md; read by final_eval.py",
+  "models": {
+    "if": {"family": "sklearn_iforest", "n_estimators": 400, "max_samples": 256, "seed": 0},
+    "eif": {"family": "isotree_eif", "ntrees": 400, "sample_size": 256, "ndim": 2, "seed": 0}
+  },
+  "rrf": {"components": ["R", "if", "eif"], "k": 60},
+  "threshold_rule": "p95_training_scores",
+  "scientific_leader": "eif",
+  "deployed_model": "eif",
+  "queue_models": ["eif", "if"],
+  "explained_models": ["if", "eif"],
+  "explanation_settings": {"background_rows": 100, "background_seed": 0}
+}
