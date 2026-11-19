@@ -4,6 +4,14 @@ Status as of 8 November 2026, for the Models and Evaluation Metrics sprint (10 N
 
 All results below are **validation results from the 2018 to 2023 training period**. The 2024 to 2026 test period has not been used for any model comparison or selection.
 
+> **Note added 19 Nov 2026.** This document grew as a dated log, and the two sentences above describe what had been done by 8 November. It contains three kinds of result:
+>
+> 1. **Training-period comparisons and selection** (sections 3 to 7 and the dated updates up to 16 November): five chronological folds within 2018 to 2023. All model selection rests on these.
+> 2. **The previously known Phase 2 baseline test result** (section 2, CP0): the Phase 2 Isolation Forest, now the frozen baseline, flags 1,131 of 36,399 test contracts. It was obtained in Phase 2 and reproduced here, not used to choose or tune any model.
+> 3. **The new held-out cross-model comparison** (entry of 19 November): run once, after the freeze, and used for reporting only.
+>
+> Sections 8 to 10 are kept as historical records of the 8 November plan, script and answers.
+
 Rules: `model_evaluation/MODEL_EVALUATION_PROTOCOL.md` (committed `c325964`, amended `21df75a`).
 
 ## 1. Objective and data split
@@ -171,6 +179,8 @@ The end-to-end figure is the sum of the separately timed stages.
 
 **Provisional status.** EIF is the leader among the families evaluated so far. The cross-family selection is made on 18 November, after the remaining families, and frozen on 19 November.
 
+**Update 19 Nov 2026:** these open points were resolved later in this log. Permutation SHAP passed the section 8 checks for EIF (11 November), so EIF met both deployment targets. The autoencoder, Deep SVDD and graph model were deferred, not evaluated (scope decision, `72c8567`). The cross-family selection on 18 November kept EIF as the deployed model (`cba5131`), and the freeze was committed on 19 November (`737d16d`).
+
 ## Update: explanation validation (protocol 8 and 8.1), completed 11 Nov 2026
 
 Code `b04ca10`, protocol amendment `72c8567`. Fold 5, explained set of 605 contracts per model, d = 14, `max_evals` = 290, backgrounds of 100 training rows (seeds 0 and 1). shap 0.52.0, scikit-learn 1.6.1, numpy 2.1.3, isotree 0.6.1.post10, MacBook Air. Result files are in `results/model_evaluation/explanations/` (not tracked in Git).
@@ -288,7 +298,73 @@ Protocol clarification 10 at `635738b`; code at `9cb30b5` (`model_evaluation/fin
 - **Timing for the final run:** EIF explanations took 5.1 min for 415 contracts, about 0.74 s each. At the final test the IF is expected to flag the 1,131 contracts flagged in Phase 2; if EIF flags a similar number, its explanations should take roughly 14 min, under the 30-minute target of section 6.3. This is an extrapolation, not a measurement.
 - **Not tested by the rehearsal:** the real-run gate on a committed `model_freeze.json`, the Phase 2 reproduction check and the test-period data load. These are covered by synthetic tests only and are exercised for the first time on 20 Nov.
 
-## 8. Planned work and milestones
+## Update: final held-out evaluation (protocol 10), run once on 19 Nov 2026
+
+**This is the single held-out run.** Test period 2024 to Aug 2026 (36,399 contracts); models refitted on the full training period (72,585 contracts), seed 0. Freeze commit `737d16d` (19 Nov, 08:18 UTC); code `9cb30b5`, protocol clarification `635738b`. Run log: one attempt, started 13:44:46 UTC, completed 14:00:02 UTC. Outputs in `results/final_test/` and the final dashboard bundle in `results/dashboard/final_test/` (not tracked in Git).
+
+**Schedule note:** the selection record planned the run for 20 Nov. It ran on 19 Nov, after the freeze commit. Only the date changed: the run order, gate checks, models, thresholds and rules are those committed in the freeze.
+
+**Integrity checks, all passed**
+- The frozen IF reproduced the Phase 2 test scores and its 1,131 flagged contracts before any new test result was computed.
+- Explanations for every flagged contract of both models: IF 1,131 in 15.4 s (TreeExplainer, additivity 3.5e-8); EIF 1,295 in 14.5 min, about 0.67 s each (permutation SHAP, additivity 2.9e-15). Correct target and exact repeat passed for both. The dashboard bundle shows attributions for both models.
+
+**Flagged contracts at the training thresholds**
+
+| Model | Threshold (training P95) | Flagged | Share of test |
+|---|---:|---:|---:|
+| IF 400 / 256 | 0.5637 | 1,131 | 0.031 |
+| EIF 400 / 256 / ndim 2 (deployed) | 0.5440 | 1,295 | 0.036 |
+| RRF (reporting only) | 0.00088 | 844 | 0.023 |
+
+**Injection recall** (2% of test contracts per type, 727 copies, seed 0; sensitivity only)
+
+| Injection | IF | EIF | RRF |
+|---|---:|---:|---:|
+| *At the test P95 (5% flagged; comparable with validation)* | | | |
+| value x 50 | 0.209 | 0.213 | 0.219 |
+| date (signing 200 days early) | 0.677 | 0.678 | 0.616 |
+| value x 5 | 0.056 | 0.055 | 0.061 |
+| primary (mean of value and date) | 0.443 | 0.446 | 0.418 |
+| *At the training threshold (what deployment flags)* | | | |
+| value x 50 | 0.129 | 0.201 | 0.089 |
+| date | 0.492 | 0.476 | 0.290 |
+| value x 5 | 0.043 | 0.050 | 0.034 |
+| primary | 0.311 | 0.338 | 0.190 |
+
+- **The validation advantage of EIF did not replicate at equal flagging rates.** At the test P95, EIF and IF are practically tied (primary 0.446 against 0.443, +0.003, inside the 0.02 margin). In validation EIF led by +0.037. This is reported as an unfavourable result for the selection; it changes no decision, because the test run is for reporting only.
+- **At the deployment threshold EIF has higher value x 50 recall (0.201 against 0.129),** but it also flags 14.5% more contracts (1,295 against 1,131), because test scores shifted differently for the two models relative to their training thresholds. Part of the gain therefore reflects a larger review set rather than better ranking. How much is not separated.
+- **RRF repeats its validation pattern:** date recall at the test P95 is 0.061 below the IF, the same direction as the validation guard failure (-0.089).
+- Value x 5 stays near chance for every model.
+- Sampling error is roughly 0.015 to 0.017 per recall figure (binomial approximation, 727 copies); differences below about 0.02 should not be read as real.
+
+**Rank agreement on the test period**
+
+| Pair | Spearman | Top-5% Jaccard | Jaccard of flagged sets |
+|---|---:|---:|---:|
+| IF, EIF | 0.979 | 0.696 | 0.708 |
+| IF, RRF | 0.874 | 0.783 | 0.603 |
+| EIF, RRF | 0.863 | 0.679 | 0.527 |
+| IF, R(c) | 0.219 | 0.207 | |
+| EIF, R(c) | 0.193 | 0.156 | |
+| RRF, R(c) | 0.576 | 0.282 | |
+
+- **Two different measures.** Spearman (0.979) measures agreement over the whole ranking of 36,399 contracts. Jaccard of the flagged sets (0.708) measures overlap of the contracts each model actually flags: 1,006 flagged by both, 125 by the IF only and 289 by EIF only, so 414 of the 1,420 flagged by either (29%) are flagged by one model alone. The models rank similarly overall, but the choice of model still changes which contracts auditors see.
+- Both models are only weakly related to R(c); the dashboard shows both.
+
+**Score drift against training** (two-sample KS statistic; medians training, then test)
+- IF 0.150 (0.409, 0.397); EIF 0.136 (0.390, 0.381); RRF 0.136; R(c) 0.087 (0.277, 0.257).
+- Test contracts score lower than training contracts for every method, so fewer than 5% cross the training thresholds, as the training-period drift check (7.9(a)) anticipated. Thresholds were not recalibrated.
+
+**Flagged share by month** (month of tender closing date; `results/final_test/flagged_by_month.csv`)
+- Among months with at least 100 contracts, monthly IF shares range from 0.2% (Apr 2026, 404 contracts) to 7.9% (Jun 2025 and Oct 2025), and EIF shares from 0.7% (Apr 2026) to 10.9% (Oct 2025). No steady trend over 2024.
+- Monthly volume falls from about 1,400 to 3,000 contracts in 2024 to under 1,000 from Apr 2025. Reporting lag is one possible explanation; it was not verified. Shares for small months are unstable.
+- Nine records have tender closing dates in Oct to Dec 2026, beyond the stated data coverage (to Aug 2026). The IF flags 7 of them and EIF 6. Their cause was not verified, and they are not interpreted further.
+
+**Limitations:** one seed and one injection sample at the test; synthetic recall measures sensitivity to artificial distortions, not corruption detection; the Phase 2 baseline's test results were known before this run; EIF's slightly higher flagging rate is a property of the fixed training threshold, not a tuning choice. 7.9(b) beyond these descriptive figures is not run.
+
+## 8. Planned work and milestones (historical plan, as of 8 November 2026)
+
+Kept as written on 8 November, so the plan can be compared with what happened; outcomes follow the table.
 
 Planned items have not been run. Each experiment is pre-registered (committed) before it runs.
 
@@ -306,7 +382,26 @@ Planned items have not been run. Each experiment is pre-registered (committed) b
 | 21 to 24 Nov | Scorecard, audit trail, append-only review log, local Streamlit dashboard | Deployment sprint |
 | 25 to 29 Nov | Hosting, optional external sources, final report and README | Final submission |
 
-## 9. Speaking script (about 2 to 3 minutes)
+**Outcome, as of 19 November 2026** (repository records only)
+
+| Planned item | Outcome | Record |
+|---|---|---|
+| Relative-value feature (7.3), f4 percentile sensitivity (7.4) | evaluated, not adopted | `8ac8ad9`, `8ee8096`; `MODEL_SELECTION_FREEZE.md` section 1 |
+| Clip-only days, PCA control | deferred, not run | scope decision, `72c8567` |
+| Autoencoder (CP3), Deep SVDD (CP4), graph (CP5) | deferred, not evaluated | scope decision, `72c8567` |
+| Explanation validation (section 8) | completed 11 Nov, earlier than planned | `b04ca10`; entry of 11 Nov |
+| RRF (7.5) | completed 14 Nov; not selected | `a566c1c`; entry of 14 Nov |
+| Face-validity review (7.1) | completed 17 to 18 Nov | `cba5131` |
+| Cross-family selection | 18 Nov | `cba5131` |
+| Freeze | 19 Nov | `737d16d` |
+| Single final test run | 19 Nov, one day earlier than planned, after the freeze | entry of 19 Nov |
+| Scorecard, audit trail, review log, local dashboard | built 13 Nov, earlier than planned; final bundle 19 Nov | `2d1b70f`, `50fd93c`, `9cb30b5` |
+| Hosting, final report and README | pending | |
+| Not in the plan: drift check 7.9(a), expanded entity resolution 7.10 | completed 13 Nov | `171b773`, `3a276b4` |
+
+## 9. Speaking script (about 2 to 3 minutes; historical, prepared for the 10 November sprint)
+
+Kept as prepared. It describes the state on 8 November, so its forward-looking sentences are superseded by the dated updates above.
 
 > Since Phase 2, I have focused on making model comparison reproducible and pre-registered.
 >
@@ -326,7 +421,9 @@ Planned items have not been run. Each experiment is pre-registered (committed) b
 >
 > Next, I will test a relative-value feature, an autoencoder, Deep SVDD and a small graph experiment, each behind a checkpoint. Then I freeze the selection on 19 November and build the auditor dashboard.
 
-## 10. Likely questions and answers
+## 10. Likely questions and answers (prepared 8 November 2026)
+
+Kept as prepared. Answers that changed are updated at the end of this section.
 
 **Q1. How do you know there is no test-set leakage?**
 All selection uses only the five time-ordered folds in 2018 to 2023. Every fitted component is fitted inside each fold's training part: indicators, supplier resolver, preprocessing and model. The validation code loads only the training period, and the rules were committed before the experiments ran. The Phase 2 baseline's test-period results (1,131 of 36,399 flagged) were already seen during Phase 2, so the test period has been scored before. The restriction applies to the new comparisons: the frozen configurations selected on 19 November are scored on the test period once, and those results are not used to choose or tune anything. Any later change is labeled exploratory.
@@ -350,3 +447,10 @@ If it fails, we will not present it as a validated explanation. The dashboard wo
 
 **Q5. Why is value inflation detected so poorly, and what will you do about it?**
 Value enters the model clipped to the training 1st and 99th percentiles, then log-scaled and standardized over all contracts. An inflated value either still falls inside the ordinary range of large contracts in other categories, or is capped at the 99th percentile, where only the binary `above_p99` flag distinguishes it. Next we test a relative-value feature: a contract's value compared with typical values in its category, fitted on training data only. It is pre-registered with a fixed adoption rule, and with the caveat that a feature built to catch value inflation gives only weak evidence when tested on injected value inflation.
+
+**Current answers, 19 November 2026**
+
+- **Q3 (is the EIF gain real?):** in validation EIF led by +0.037. On the held-out test period, at the same 5% flagging rate, EIF and the IF were practically tied (primary 0.446 against 0.443). The validation gain did not replicate, and this is reported as an unfavourable result. The selection stands under the committed rules.
+- **Q4 (how is EIF explained?):** permutation SHAP passed all section 8 checks on 11 November, and on the test period it explained all 1,295 flagged contracts in 14.5 minutes, with additivity, correct target and exact repeat checked again.
+- **Q5 (value inflation):** the relative-value feature was evaluated and not adopted. Value inflation is still weakly detected: value x 50 recall at the test P95 is about 0.21 for every method, and value x 5 is near chance.
+- **Q6 (was EIF worth it?):** it was the pre-registered winner on validation, met both deployment targets, and on held-out data performed about the same as the baseline. It was a safe choice under fixed rules, not a breakthrough.
