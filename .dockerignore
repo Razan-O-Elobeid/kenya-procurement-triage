@@ -1,0 +1,20 @@
+# Allowlist: only these files reach the build context. data/, results/, notebooks, tests,
+# .env files, the baseline joblib and everything else stay on this machine.
+*
+!Dockerfile
+!serving/requirements-serving.txt
+!serving/__init__.py
+!serving/api.py
+!serving/core.py
+!serving/schema.py
+!src/__init__.py
+!src/constants.py
+!src/entity_resolution.py
+!src/features.py
+!src/pipeline.py
+!src/transformers.py
+!src/tuning.py
+!model_evaluation/eif_eval.py
+!model_evaluation/harness.py
+!models/serving_bundle.joblib
+!models/serving_bundle.json
