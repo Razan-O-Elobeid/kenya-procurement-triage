@@ -27,7 +27,7 @@ def periods(n=5000, buyers=30):
         "value_amount": np.where(rng.random(n) < .01, 0, rng.lognormal(13, 2, n)),
         "tender_mainProcurementCategory": rng.choice(["goods", "works", "services"], n),
         "tender_procurementMethod": rng.choice(["open", "selective", "direct"], n),
-        "status": np.where(rng.random(n) < .01, "terminated", "active"),
+        "status": rng.choice(np.array(["terminated", "active", None], dtype=object), n, p=[.02, .38, .6]),
         "tender_tenderPeriod_endDate": end,
     })
     df["dateSigned"] = df["tender_tenderPeriod_endDate"] + pd.to_timedelta(rng.normal(25, 60, n).round(), "D")
@@ -100,6 +100,9 @@ results.append(ok(all(ex.max_diff(single[f"score_{m}"], ref[f"score_{m}"]) <= 1e
                   f"single-contract scores equal the frozen batch ({len(pos)} contracts)"))
 results.append(ok(all(ex.max_diff(single[c], ref[c]) <= 1e-12 for c in ex.FEATURES),
                   "single-contract history features equal the frozen batch"))
+nulls = Xte["status"].iloc[pos].isna().to_numpy()
+results.append(ok(nulls.any() and (~nulls).any() and np.array_equal(single["is_terminated"], ref["is_terminated"]),
+                  f"is_terminated equals the frozen batch ({int(nulls.sum())} null and {int((~nulls).sum())} non-null status)"))
 results.append(ok(all(np.array_equal(single[f"flag_{m}"], ref[f"flag_{m}"].astype(bool)) and
                       ex.max_diff(single[f"pct_{m}"], ref[f"pct_{m}"]) <= 1e-12 for m in core.MODELS),
                   "flags and percentiles equal the frozen batch"))
