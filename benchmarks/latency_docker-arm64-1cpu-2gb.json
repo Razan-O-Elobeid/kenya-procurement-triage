@@ -1,0 +1,58 @@
+{
+  "measured_utc": "2026-11-25T18:28:31+00:00",
+  "label": "docker-arm64-1cpu-2gb",
+  "server": "Docker Desktop on MacBook Air, Apple Silicon, Linux ARM64, 1 CPU and 2 GB memory",
+  "url_kind": "local",
+  "client": {
+    "platform": "macOS-15.2-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "python": "3.13.16",
+    "cpu_count": 8
+  },
+  "method": "sequential requests, one client, new connection per request, first 5 requests per scenario not timed; inputs are held-out contracts (seed 2)",
+  "model": {
+    "deployed_model": "eif",
+    "artifact_sha256": "2082c9f82531e44e04fa75ae43db9e275c783762c7992c2c6c20f12d1361cb87",
+    "git_commit": "42d73ef8f69eaebdab85e3c06201f60c7fea2505"
+  },
+  "single_contract": {
+    "client_round_trip_ms": {
+      "n": 100,
+      "mean": 136.2,
+      "p50": 134.7,
+      "p95": 149.0,
+      "p99": 153.2,
+      "max": 157.9
+    },
+    "server_scoring_ms": {
+      "n": 100,
+      "mean": 134.0,
+      "p50": 132.4,
+      "p95": 146.9,
+      "p99": 150.7,
+      "max": 155.7
+    },
+    "failures": 0
+  },
+  "batch_of_20": {
+    "client_round_trip_ms": {
+      "n": 20,
+      "mean": 2344.7,
+      "p50": 2333.4,
+      "p95": 2394.4,
+      "p99": 2459.0,
+      "max": 2475.1
+    },
+    "server_scoring_ms": {
+      "n": 20,
+      "mean": 2342.1,
+      "p50": 2330.8,
+      "p95": 2391.7,
+      "p99": 2456.5,
+      "max": 2472.7
+    },
+    "client_ms_per_contract_p50": 116.7,
+    "failures": 0
+  },
+  "wall_seconds": 73.3
+}
